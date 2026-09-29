@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Glowing Arch Backdrop Ring -->
+    <path
+        android:pathData="M 28,52 A 28,28 0 1,1 80,52"
+        android:strokeWidth="1.5"
+        android:strokeColor="#8000A8E8"
+        android:fillColor="#00000000" />
+
+    <!-- Outer Emblem Mountain 'A' Shape -->
+    <path
+        android:pathData="M54,18 L76,58 L63,58 L54,34 L45,58 L32,58 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Inner Ice Accent Peak -->
+    <path
+        android:pathData="M54,26 L68,54 L54,42 L40,54 Z"
+        android:fillColor="#FF00A8E8" />
+
+    <!-- Central Compass Circle Ring -->
+    <path
+        android:pathData="M 44,38 A 10,10 0 1,0 64,38 A 10,10 0 1,0 44,38 Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FF00A8E8"
+        android:fillColor="#00000000" />
+
+    <!-- Compass North Star -->
+    <path
+        android:pathData="M54,28 L56,36 L64,38 L56,40 L54,48 L52,40 L44,38 L52,36 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Snowy Antarctic Peaks Base Silhouette -->
+    <path
+        android:pathData="M16,68 L32,54 L44,64 L54,50 L68,66 L82,58 L92,68 L92,76 L16,76 Z"
+        android:fillColor="#3380D4F4" />
+
+    <!-- POLARIS Typography Wordmark Base -->
+    <path
+        android:pathData="M 22,82 L 26,82 Q 28,82 28,84 Q 28,86 26,86 L 24,86 L 24,90 L 22,90 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Wordmark Line Accent -->
+    <path
+        android:pathData="M20,93 L88,93"
+        android:strokeWidth="1"
+        android:strokeColor="#FF00A8E8" />
+
+    <!-- Bottom Star Accent -->
+    <path
+        android:pathData="M54,91 L55,93 L57,93 L55,94 L54,96 L53,93 L53,93 Z"
+        android:fillColor="#FFFFFFFF" />
+
+</vector>
