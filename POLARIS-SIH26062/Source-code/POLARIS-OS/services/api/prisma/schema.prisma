@@ -1,0 +1,914 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// POLARIS-OS - Approved Phase 9 physical schema
+// 31 entities / 66 logical relationships
+// ============================================================
+
+enum UserStatus {
+  @@map("user_status_enum")
+  active
+  inactive
+}
+
+enum StationType {
+  @@map("station_type_enum")
+  antarctic
+  arctic
+}
+
+enum StationStatus {
+  @@map("station_status_enum")
+  active
+  seasonal_closure @map("seasonal-closure")
+  under_maintenance @map("under-maintenance")
+  decommissioned
+}
+
+enum ApprovalDecision {
+  @@map("approval_decision_enum")
+  pending
+  approved
+  rejected
+}
+
+enum SyncOrigin {
+  @@map("sync_origin_enum")
+  offline
+  online
+}
+
+enum ExpeditionStatus {
+  @@map("expedition_status_enum")
+  draft
+  planned
+  approved
+  in_progress @map("in-progress")
+  disrupted
+  completed
+  cancelled
+}
+
+enum PlanVersionStatus {
+  @@map("plan_version_status_enum")
+  proposed
+  approved
+  rejected
+  superseded
+}
+
+enum TransportResourceStatus {
+  @@map("transport_resource_status_enum")
+  available
+  maintenance
+  unavailable
+}
+
+enum TransportLegStatus {
+  @@map("transport_leg_status_enum")
+  planned
+  confirmed
+  delayed
+  departed
+  in_transit @map("in-transit")
+  arrived
+  cancelled
+  diverted
+}
+
+enum CargoItemStatus {
+  @@map("cargo_item_status_enum")
+  packed
+  in_transit @map("in-transit")
+  in_storage_at_station @map("in-storage-at-station")
+  delivered
+  damaged
+  returned
+}
+
+enum RecommendationTrigger {
+  @@map("recommendation_trigger_enum")
+  transport_disruption
+  incident
+  inventory_risk
+  weather_event
+}
+
+enum RecommendationStatus {
+  @@map("recommendation_status_enum")
+  generated
+  under_review
+  decided
+  applied
+  superseded
+}
+
+enum InventoryTransactionType {
+  @@map("inventory_transaction_type_enum")
+  receipt
+  consumption
+  transfer_out
+  transfer_in
+  damage
+  loss
+  adjustment
+  return
+}
+
+enum PersonnelFitnessStatus {
+  @@map("personnel_fitness_status_enum")
+  fit_to_deploy @map("fit-to-deploy")
+  conditional
+  not_fit @map("not-fit")
+  pending_review @map("pending-review")
+}
+
+enum PersonnelAssignmentStatus {
+  @@map("personnel_assignment_status_enum")
+  proposed
+  confirmed
+  in_transit @map("in-transit")
+  deployed
+  completed
+  cancelled
+  unassigned
+}
+
+enum IncidentSeverity {
+  @@map("incident_severity_enum")
+  low
+  moderate
+  high
+  critical
+}
+
+enum IncidentStatus {
+  @@map("incident_status_enum")
+  declared
+  active
+  resource_requested
+  resolved
+  closed
+  reopened
+}
+
+enum IncidentResourceTarget {
+  @@map("incident_resource_target_enum")
+  Personnel
+  CargoItem
+  TransportLeg
+}
+
+enum ResourceRequestLineType {
+  @@map("resource_request_line_type_enum")
+  personnel
+  cargo
+  inventory
+  transport
+}
+
+enum SyncDeviceType {
+  @@map("sync_device_type_enum")
+  station_pwa @map("station-pwa")
+  hq_web @map("hq-web")
+}
+
+enum SyncDeviceStatus {
+  @@map("sync_device_status_enum")
+  active
+  revoked
+}
+
+enum SyncOperationType {
+  @@map("sync_operation_type_enum")
+  create
+  update
+  status_change
+  cancel
+}
+
+enum SyncOperationStatus {
+  @@map("sync_operation_status_enum")
+  pending
+  synced
+  failed
+  rejected
+  conflicted
+  cancelled
+}
+
+enum WeatherEventSource {
+  @@map("weather_event_source_enum")
+  manual
+  external_future @map("external-future")
+}
+
+// ============================================================
+// 1. GOVERNANCE & IDENTITY
+// ============================================================
+
+model User {
+  user_id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name     String
+  employee_code String     @unique
+  email         String     @unique
+  phone         String?
+  status        UserStatus @default(active)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  last_login_at DateTime?  @db.Timestamptz(6)
+  deleted_at    DateTime?  @db.Timestamptz(6)
+  deleted_by    String?    @db.Uuid
+
+  deleted_by_user User?               @relation("UserDeletedBy", fields: [deleted_by], references: [user_id])
+  deleted_users   User[]              @relation("UserDeletedBy")
+  role_assignments UserRoleAssignment[]
+  requested_approvals Approval[]       @relation("ApprovalRequestedBy")
+  decided_approvals   Approval[]       @relation("ApprovalDecidedBy")
+  audit_logs      AuditLog[]           @relation("AuditActor")
+  uploaded_attachments Attachment[]    @relation("AttachmentUploadedBy")
+  deleted_attachments Attachment[]     @relation("AttachmentDeletedBy")
+  expeditions_created Expedition[]     @relation("ExpeditionCreatedBy")
+  plan_versions_created PlanVersion[]  @relation("PlanVersionCreatedBy")
+  cargo_events    CargoMovementEvent[] @relation("CargoEventActor")
+  inventory_transactions InventoryTransaction[] @relation("InventoryTransactionActor")
+  incidents_declared Incident[]        @relation("IncidentDeclaredBy")
+  incident_events IncidentEvent[]      @relation("IncidentEventActor")
+  resource_requests ResourceRequest[]  @relation("ResourceRequestRequestedBy")
+  sync_operations SyncOperation[]      @relation("SyncPerformedBy")
+  sync_conflicts_resolved SyncConflict[] @relation("SyncConflictResolvedBy")
+  weather_events_logged WeatherEvent[]  @relation("WeatherLoggedBy")
+  waypoints_logged TransportLegWaypoint[] @relation("WaypointLoggedBy")
+  sync_devices SyncDevice[]            @relation("SyncDeviceAssignedUser")
+  station_deleted_stations Station[]    @relation("StationDeletedBy")
+  item_catalog_deleted_items ItemCatalog[] @relation("ItemCatalogDeletedBy")
+  personnel_records Personnel[]         @relation("PersonnelUser")
+  credential        UserCredential?
+  refresh_sessions UserRefreshSession[]
+
+  @@index([deleted_by])
+  @@map("user")
+}
+
+model UserCredential {
+  credential_id String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @unique @db.Uuid
+  password_hash String
+  algorithm     String   @default("argon2id")
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("user_credential")
+}
+
+model UserRefreshSession {
+  session_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id String @db.Uuid
+  token_hash String @unique
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  revoked_at DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, revoked_at])
+  @@index([expires_at])
+  @@map("user_refresh_session")
+}
+
+model Role {
+  role_id      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String               @unique
+  description  String?
+  assignments  UserRoleAssignment[]
+  permissions  Permission[]
+
+  @@map("role")
+}
+
+model UserRoleAssignment {
+  assignment_id String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String    @db.Uuid
+  role_id       String    @db.Uuid
+  station_id    String?   @db.Uuid
+  valid_from    DateTime  @db.Timestamptz(6)
+  valid_to      DateTime? @db.Timestamptz(6)
+  is_primary    Boolean   @default(false)
+
+  user    User    @relation(fields: [user_id], references: [user_id])
+  role    Role    @relation(fields: [role_id], references: [role_id])
+  station Station? @relation(fields: [station_id], references: [station_id])
+
+  @@index([user_id])
+  @@index([role_id])
+  @@index([station_id])
+  @@map("user_role_assignment")
+}
+
+model Permission {
+  permission_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id       String @db.Uuid
+  entity        String
+  action        String
+
+  role Role @relation(fields: [role_id], references: [role_id])
+
+  @@unique([role_id, entity, action])
+  @@index([role_id])
+  @@map("permission")
+}
+
+model Station {
+  station_id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String
+  code                    String        @unique
+  type                    StationType
+  location                Unsupported("geography(Point,4326)")
+  storage_capacity_weight Decimal       @db.Decimal
+  storage_capacity_volume Decimal       @db.Decimal
+  status                  StationStatus @default(active)
+  timezone                String
+  deleted_at              DateTime?     @db.Timestamptz(6)
+  deleted_by              String?       @db.Uuid
+
+  deleted_by_user User? @relation("StationDeletedBy", fields: [deleted_by], references: [user_id])
+  role_assignments UserRoleAssignment[]
+  expedition_links ExpeditionStation[]
+  inventory_stocks InventoryStock[]
+  personnel_current Personnel[]
+  personnel_assignments PersonnelAssignment[]
+  incidents Incident[]
+  cargo_events CargoMovementEvent[]
+  sync_devices SyncDevice[]
+  weather_events WeatherEvent[]
+
+  @@index([deleted_by])
+  @@index([status])
+  @@map("station")
+}
+
+model Approval {
+  approval_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type String
+  entity_id   String @db.Uuid
+  requested_by String @db.Uuid
+  decided_by  String? @db.Uuid
+  decision    ApprovalDecision @default(pending)
+  decided_at  DateTime? @db.Timestamptz(6)
+    reason      String?
+    sync_version Int @default(0)
+    sync_updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  requested_by_user User @relation("ApprovalRequestedBy", fields: [requested_by], references: [user_id])
+  decided_by_user   User? @relation("ApprovalDecidedBy", fields: [decided_by], references: [user_id])
+  recommendations Recommendation[]
+
+  @@index([entity_type, entity_id])
+  @@index([requested_by])
+  @@index([decided_by])
+  @@map("approval")
+}
+
+model AuditLog {
+  log_id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type      String
+  entity_id        String      @db.Uuid
+  actor            String?     @db.Uuid
+  device_id        String?     @db.Uuid
+  action           String
+  old_value        Json?
+  new_value        Json?
+  timestamp_utc    DateTime    @default(now()) @db.Timestamptz(6)
+  origin_tz_offset String?
+  sync_origin      SyncOrigin?
+  reason           String?
+
+  actor_user User? @relation("AuditActor", fields: [actor], references: [user_id])
+  device    SyncDevice? @relation("AuditDevice", fields: [device_id], references: [device_id])
+
+  @@index([entity_type, entity_id, timestamp_utc])
+  @@index([actor])
+  @@index([device_id])
+  @@map("audit_log")
+}
+
+model Attachment {
+  attachment_id String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type   String
+  entity_id     String   @db.Uuid
+  file_name     String
+  file_type     String
+  uploaded_by   String   @db.Uuid
+  uploaded_at   DateTime @default(now()) @db.Timestamptz(6)
+  storage_url   String
+  is_permanent  Boolean  @default(false)
+  deleted_at    DateTime? @db.Timestamptz(6)
+  deleted_by    String?  @db.Uuid
+
+  uploaded_by_user User @relation("AttachmentUploadedBy", fields: [uploaded_by], references: [user_id])
+  deleted_by_user  User? @relation("AttachmentDeletedBy", fields: [deleted_by], references: [user_id])
+
+  @@index([entity_type, entity_id])
+  @@index([uploaded_by])
+  @@index([deleted_by])
+  @@map("attachment")
+}
+
+// ============================================================
+// 2. EXPEDITION, TRANSPORT & CARGO
+// ============================================================
+
+model Expedition {
+  expedition_id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  code                  String           @unique
+  season                String
+  planned_start         DateTime         @db.Date
+  planned_end           DateTime         @db.Date
+  status                ExpeditionStatus @default(draft)
+  current_plan_version_id String? @unique @db.Uuid
+    created_by            String           @db.Uuid
+    sync_version          Int              @default(0)
+    sync_updated_at       DateTime         @default(now()) @db.Timestamptz(6)
+
+  current_plan_version PlanVersion? @relation("CurrentPlanVersion", fields: [current_plan_version_id], references: [version_id])
+  created_by_user      User @relation("ExpeditionCreatedBy", fields: [created_by], references: [user_id])
+  stations             ExpeditionStation[]
+  plan_versions        PlanVersion[] @relation("ExpeditionPlanVersions")
+  transport_legs       TransportLeg[]
+  personnel_assignments PersonnelAssignment[]
+
+  @@index([created_by])
+  @@index([current_plan_version_id])
+  @@index([status])
+  @@map("expedition")
+}
+
+model ExpeditionStation {
+  expedition_id String @db.Uuid
+  station_id    String @db.Uuid
+
+  expedition Expedition @relation(fields: [expedition_id], references: [expedition_id])
+  station    Station    @relation(fields: [station_id], references: [station_id])
+
+  @@id([expedition_id, station_id])
+  @@index([station_id])
+  @@map("expedition_station")
+}
+
+model PlanVersion {
+  version_id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  expedition_id          String           @db.Uuid
+  version_number         Int
+  created_by             String           @db.Uuid
+  created_at             DateTime         @default(now()) @db.Timestamptz(6)
+  status                 PlanVersionStatus @default(proposed)
+  change_summary         String?
+  superseded_by_version_id String?        @db.Uuid
+  snapshot               Json
+
+  expedition Expedition @relation("ExpeditionPlanVersions", fields: [expedition_id], references: [expedition_id])
+  created_by_user User @relation("PlanVersionCreatedBy", fields: [created_by], references: [user_id])
+  current_for_expedition Expedition? @relation("CurrentPlanVersion")
+  superseded_by PlanVersion? @relation("PlanVersionSupersession", fields: [superseded_by_version_id], references: [version_id])
+  superseded_versions PlanVersion[] @relation("PlanVersionSupersession")
+
+  @@unique([expedition_id, version_number])
+  @@index([created_by])
+  @@index([superseded_by_version_id])
+  @@map("plan_version")
+}
+
+model TransportResource {
+  resource_id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  type                  String
+  registration_code     String
+  max_capacity_weight   Decimal @db.Decimal
+  max_capacity_volume   Decimal @db.Decimal
+  max_seats_berths      Int
+  hazard_class_restrictions Unsupported("integer[]")
+  status                TransportResourceStatus
+  available_from       DateTime? @db.Date
+  available_to         DateTime? @db.Date
+
+  transport_legs TransportLeg[]
+
+  @@index([status])
+  @@index([registration_code])
+  @@map("transport_resource")
+}
+
+model TransportLeg {
+  leg_id                String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                  String @unique
+  expedition_id         String @db.Uuid
+  transport_resource_id String @db.Uuid
+  mode                  String
+  origin                String
+  origin_point          Unsupported("geography(Point,4326)")
+  destination           String
+  destination_point     Unsupported("geography(Point,4326)")
+  planned_departure     DateTime @db.Timestamptz(6)
+  planned_arrival       DateTime @db.Timestamptz(6)
+  status                TransportLegStatus
+  capacity_weight       Decimal? @db.Decimal
+  capacity_volume       Decimal? @db.Decimal
+  capacity_seats        Int?
+  hazard_restrictions   Unsupported("integer[]")
+  allow_concurrent_leg  Boolean @default(false)
+  sync_version          Int @default(0)
+  sync_updated_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  expedition Expedition @relation(fields: [expedition_id], references: [expedition_id])
+  transport_resource TransportResource @relation(fields: [transport_resource_id], references: [resource_id])
+  cargo_items CargoItem[]
+  cargo_events CargoMovementEvent[]
+  personnel_assignments PersonnelAssignment[]
+  incidents Incident[]
+  inventory_transactions InventoryTransaction[]
+  waypoints TransportLegWaypoint[]
+
+  @@index([expedition_id])
+  @@index([transport_resource_id])
+  @@index([status])
+  @@map("transport_leg")
+}
+
+model CargoItem {
+  cargo_id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tracking_code     String @unique
+  leg_id            String @db.Uuid
+  description       String
+  category          String
+  weight            Decimal @db.Decimal
+  volume            Decimal @db.Decimal
+  hazard_class      Int?
+  is_return_cargo   Boolean @default(false)
+  status            CargoItemStatus
+  parent_shipment_id String? @db.Uuid
+  sync_version      Int @default(0)
+  sync_updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  leg TransportLeg @relation(fields: [leg_id], references: [leg_id])
+  parent_shipment CargoItem? @relation("CargoParentShipment", fields: [parent_shipment_id], references: [cargo_id])
+  child_shipments CargoItem[] @relation("CargoParentShipment")
+  movement_events CargoMovementEvent[]
+
+  @@index([leg_id])
+  @@index([parent_shipment_id])
+  @@index([status])
+  @@map("cargo_item")
+}
+
+model CargoMovementEvent {
+  event_id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cargo_id      String @db.Uuid
+  leg_id        String? @db.Uuid
+  station_id    String? @db.Uuid
+  event_type    String
+  timestamp_utc DateTime @default(now()) @db.Timestamptz(6)
+  actor         String @db.Uuid
+  reason        String?
+
+  cargo CargoItem @relation(fields: [cargo_id], references: [cargo_id])
+  leg TransportLeg? @relation(fields: [leg_id], references: [leg_id])
+  station Station? @relation(fields: [station_id], references: [station_id])
+  actor_user User @relation("CargoEventActor", fields: [actor], references: [user_id])
+
+  @@index([cargo_id, timestamp_utc])
+  @@index([leg_id])
+  @@index([station_id])
+  @@map("cargo_movement_event")
+}
+
+model Recommendation {
+  recommendation_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  trigger_type      RecommendationTrigger
+  trigger_id        String @db.Uuid
+  generated_at      DateTime @default(now()) @db.Timestamptz(6)
+  recommendation_type String
+  proposed_change   Json
+  constraint_basis  String
+  status            RecommendationStatus
+  approval_id       String? @db.Uuid
+
+  approval Approval? @relation(fields: [approval_id], references: [approval_id])
+
+  @@index([trigger_type, trigger_id])
+  @@index([status])
+  @@index([approval_id])
+  @@map("recommendation")
+}
+
+// ============================================================
+// 3. INVENTORY, PERSONNEL & INCIDENTS
+// ============================================================
+
+model ItemCatalog {
+  item_id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  category     String
+  hazard_class Int?
+  unit         String
+  description  String?
+  is_active    Boolean @default(true)
+  deleted_at   DateTime? @db.Timestamptz(6)
+  deleted_by   String? @db.Uuid
+
+  deleted_by_user User? @relation("ItemCatalogDeletedBy", fields: [deleted_by], references: [user_id])
+  inventory_stocks InventoryStock[]
+  resource_request_lines ResourceRequestLine[]
+
+  @@index([deleted_by])
+  @@index([is_active])
+  @@map("item_catalog")
+}
+
+model InventoryStock {
+  stock_id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  station_id           String @db.Uuid
+  item_catalog_id      String @db.Uuid
+  quantity             Decimal @db.Decimal
+  reorder_threshold    Decimal @db.Decimal
+  safety_stock_minimum Decimal @db.Decimal
+  last_updated         DateTime @default(now()) @db.Timestamptz(6)
+  sync_version         Int @default(0)
+  sync_updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  station Station @relation(fields: [station_id], references: [station_id])
+  item_catalog ItemCatalog @relation(fields: [item_catalog_id], references: [item_id])
+  transactions InventoryTransaction[]
+
+  @@unique([station_id, item_catalog_id])
+  @@index([item_catalog_id])
+  @@map("inventory_stock")
+}
+
+model InventoryTransaction {
+  transaction_id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stock_id         String @db.Uuid
+  transport_leg_id String? @db.Uuid
+  transaction_type InventoryTransactionType
+  quantity_delta   Decimal @db.Decimal
+  timestamp_utc    DateTime @default(now()) @db.Timestamptz(6)
+  actor            String @db.Uuid
+  reason           String?
+  transfer_id      String? @db.Uuid
+
+  stock InventoryStock @relation(fields: [stock_id], references: [stock_id])
+  transport_leg TransportLeg? @relation(fields: [transport_leg_id], references: [leg_id])
+  actor_user User @relation("InventoryTransactionActor", fields: [actor], references: [user_id])
+
+  @@index([stock_id, timestamp_utc])
+  @@index([transport_leg_id])
+  @@index([actor])
+  @@index([transfer_id])
+  @@map("inventory_transaction")
+}
+
+model Personnel {
+  person_id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String? @db.Uuid
+  employee_code      String? @unique
+  name               String
+  role_on_expedition String
+  fitness_status     PersonnelFitnessStatus
+  assigned_station_id String? @db.Uuid
+  rotation_window    Unsupported("daterange")
+
+  user User? @relation("PersonnelUser", fields: [user_id], references: [user_id])
+  assigned_station Station? @relation(fields: [assigned_station_id], references: [station_id])
+  assignments PersonnelAssignment[]
+
+  @@index([user_id])
+  @@index([assigned_station_id])
+  @@map("personnel")
+}
+
+model PersonnelAssignment {
+  assignment_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  personnel_id  String @db.Uuid
+  expedition_id String @db.Uuid
+  station_id    String? @db.Uuid
+  leg_id        String? @db.Uuid
+  seat_berth_ref String?
+  status        PersonnelAssignmentStatus
+  start_date    DateTime @db.Date
+  end_date      DateTime? @db.Date
+  rotation_id   String? @db.Uuid
+  sync_version  Int @default(0)
+  sync_updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  personnel Personnel @relation(fields: [personnel_id], references: [person_id])
+  expedition Expedition @relation(fields: [expedition_id], references: [expedition_id])
+  station Station? @relation(fields: [station_id], references: [station_id])
+  leg TransportLeg? @relation(fields: [leg_id], references: [leg_id])
+
+  @@index([personnel_id])
+  @@index([expedition_id])
+  @@index([station_id])
+  @@index([leg_id])
+  @@index([rotation_id])
+  @@map("personnel_assignment")
+}
+
+model Incident {
+  incident_id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  station_id  String? @db.Uuid
+  leg_id      String? @db.Uuid
+  type        String
+  declared_at DateTime @default(now()) @db.Timestamptz(6)
+  declared_by String @db.Uuid
+  severity    IncidentSeverity
+  status      IncidentStatus @default(declared)
+  description String?
+  location    Unsupported("geography(Point,4326)")
+  sync_version Int @default(0)
+  sync_updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  station Station? @relation(fields: [station_id], references: [station_id])
+  leg TransportLeg? @relation(fields: [leg_id], references: [leg_id])
+  declared_by_user User @relation("IncidentDeclaredBy", fields: [declared_by], references: [user_id])
+  events IncidentEvent[]
+  resource_links IncidentResourceLink[]
+  resource_requests ResourceRequest[]
+
+  @@index([station_id])
+  @@index([leg_id])
+  @@index([declared_by])
+  @@index([status])
+  @@map("incident")
+}
+
+model IncidentEvent {
+  event_id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_id   String @db.Uuid
+  event_type    String
+  timestamp_utc DateTime @default(now()) @db.Timestamptz(6)
+  actor         String @db.Uuid
+  notes         String?
+
+  incident Incident @relation(fields: [incident_id], references: [incident_id])
+  actor_user User @relation("IncidentEventActor", fields: [actor], references: [user_id])
+
+  @@index([incident_id, timestamp_utc])
+  @@index([actor])
+  @@map("incident_event")
+}
+
+model IncidentResourceLink {
+  incident_id        String @db.Uuid
+  target_entity_type IncidentResourceTarget
+  target_entity_id   String @db.Uuid
+
+  incident Incident @relation(fields: [incident_id], references: [incident_id])
+
+  @@id([incident_id, target_entity_type, target_entity_id])
+  @@index([target_entity_type, target_entity_id])
+  @@map("incident_resource_link")
+}
+
+model ResourceRequest {
+  request_id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_id  String @db.Uuid
+  requested_at DateTime @default(now()) @db.Timestamptz(6)
+  requested_by String @db.Uuid
+  status       String
+
+  incident Incident @relation(fields: [incident_id], references: [incident_id])
+  requested_by_user User @relation("ResourceRequestRequestedBy", fields: [requested_by], references: [user_id])
+  lines ResourceRequestLine[]
+
+  @@index([incident_id])
+  @@index([requested_by])
+  @@map("resource_request")
+}
+
+model ResourceRequestLine {
+  line_id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_id          String @db.Uuid
+  resource_type       ResourceRequestLineType
+  quantity            Decimal @db.Decimal
+  item_reference      String? @db.Uuid
+  item_reference_note String?
+
+  request ResourceRequest @relation(fields: [request_id], references: [request_id])
+  item_catalog ItemCatalog? @relation(fields: [item_reference], references: [item_id])
+
+  @@index([request_id])
+  @@index([item_reference])
+  @@map("resource_request_line")
+}
+
+// ============================================================
+// 4. OFFLINE, SYNC & CONFLICT
+// ============================================================
+
+model SyncDevice {
+  device_id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  device_type       SyncDeviceType
+  assigned_user_id  String? @db.Uuid
+  assigned_station_id String @db.Uuid
+  last_sync_at      DateTime? @db.Timestamptz(6)
+  app_version       String
+  status            SyncDeviceStatus @default(active)
+  session_expiry    DateTime? @db.Timestamptz(6)
+
+  assigned_user User? @relation("SyncDeviceAssignedUser", fields: [assigned_user_id], references: [user_id])
+  assigned_station Station @relation(fields: [assigned_station_id], references: [station_id])
+  audit_logs AuditLog[] @relation("AuditDevice")
+  sync_operations SyncOperation[]
+
+  @@index([assigned_user_id])
+  @@index([assigned_station_id])
+  @@index([status])
+  @@map("sync_device")
+}
+
+model SyncOperation {
+  op_id                 String @id @db.Uuid
+  device_id             String @db.Uuid
+  performed_by          String @db.Uuid
+  local_sequence_number Int
+  target_entity_type    String
+  target_entity_id      String @db.Uuid
+  operation_type        SyncOperationType
+  payload               Json
+    base_version          Int?
+    local_timestamp       DateTime? @db.Timestamptz(6)
+  status                SyncOperationStatus @default(pending)
+  applied_at            DateTime? @db.Timestamptz(6)
+
+  device SyncDevice @relation(fields: [device_id], references: [device_id])
+  performed_by_user User @relation("SyncPerformedBy", fields: [performed_by], references: [user_id])
+
+  @@unique([device_id, local_sequence_number])
+  @@index([performed_by])
+  @@index([target_entity_type, target_entity_id])
+  @@index([status])
+  @@map("sync_operation")
+}
+
+model SyncConflict {
+  conflict_id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type          String
+  entity_id            String @db.Uuid
+  competing_operations Json
+  resolution           String?
+  resolved_by          String? @db.Uuid
+  resolved_at          DateTime? @db.Timestamptz(6)
+
+  resolved_by_user User? @relation("SyncConflictResolvedBy", fields: [resolved_by], references: [user_id])
+
+  @@index([entity_type, entity_id])
+  @@index([resolved_by])
+  @@map("sync_conflict")
+}
+
+// ============================================================
+// 5. WEATHER / GIS
+// ============================================================
+
+model WeatherEvent {
+  event_id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  station_id String? @db.Uuid
+  event_type String
+  severity   String?
+  logged_at  DateTime @default(now()) @db.Timestamptz(6)
+  logged_by  String @db.Uuid
+  source     WeatherEventSource
+  notes      String?
+
+  station Station? @relation(fields: [station_id], references: [station_id])
+  logged_by_user User @relation("WeatherLoggedBy", fields: [logged_by], references: [user_id])
+
+  @@index([station_id])
+  @@index([logged_by])
+  @@index([logged_at])
+  @@map("weather_event")
+}
+
+model TransportLegWaypoint {
+  waypoint_id    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leg_id         String @db.Uuid
+  sequence_number Int
+  location       Unsupported("geography(Point,4326)")
+  logged_at      DateTime @default(now()) @db.Timestamptz(6)
+  logged_by      String @db.Uuid
+
+  leg TransportLeg @relation(fields: [leg_id], references: [leg_id])
+  logged_by_user User @relation("WaypointLoggedBy", fields: [logged_by], references: [user_id])
+
+  @@unique([leg_id, sequence_number])
+  @@index([leg_id, logged_at])
+  @@index([logged_by])
+  @@map("transport_leg_waypoint")
+}

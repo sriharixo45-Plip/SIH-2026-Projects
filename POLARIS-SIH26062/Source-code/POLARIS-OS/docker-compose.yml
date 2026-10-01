@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: polaris-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: polaris
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: polaris_os
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - polaris_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polaris -d polaris_os"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://polaris:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/polaris_os?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/db').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  hq-dashboard:
+    build:
+      context: .
+      dockerfile: apps/hq-dashboard/Dockerfile
+    ports:
+      - "${HQ_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  polaris_postgres_data:

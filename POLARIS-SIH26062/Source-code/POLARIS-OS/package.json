@@ -1,0 +1,39 @@
+{
+  "name": "polaris-os",
+  "version": "1.0.0",
+  "description": "SIH26062 - Integrated Polar Expedition Logistics &amp; Asset Management System",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "npm run build --workspace services/api && npm run build --workspace apps/hq-dashboard",
+    "build:api": "npm run build --workspace services/api",
+    "build:dashboard": "npm run build --workspace apps/hq-dashboard",
+    "test": "npm run test --workspace services/api",
+    "test:e2e": "npm run test:e2e --workspace services/api",
+    "dev:api": "npm run start:dev --workspace services/api",
+    "dev:dashboard": "npm run dev --workspace apps/hq-dashboard",
+    "demo:up": "docker compose up --build -d",
+    "demo:down": "docker compose down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sriharixo45-Plip/POLARIS-OS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sriharixo45-Plip/POLARIS-OS/issues"
+  },
+  "homepage": "https://github.com/sriharixo45-Plip/POLARIS-OS#readme",
+  "private": "true",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ]
+}

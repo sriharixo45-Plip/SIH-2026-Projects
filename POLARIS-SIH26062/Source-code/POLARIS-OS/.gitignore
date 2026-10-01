@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+**/.gradle/
+**/build/
+*.apk
+local.properties
+.env
+.env.*
+!.env.example
