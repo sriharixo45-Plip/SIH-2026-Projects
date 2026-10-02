@@ -1,9 +1,9 @@
 type SidebarProps = { activeRoute: string; onNavigate: (route: string) => void; incidentCount?: number; pendingApprovalCount?: number }
 const sections: [string, [string, string][]][] = [
-  ['COMMAND', [['command-center', 'Command Center'], ['expeditions', 'Expeditions'], ['transport', 'Transport']]],
-  ['LOGISTICS', [['cargo', 'Cargo'], ['inventory', 'Inventory'], ['personnel', 'Personnel']]],
-  ['RESPONSE', [['incidents', 'Incidents'], ['recommendations', 'Recommendations'], ['approvals', 'Approvals']]],
-  ['SYNCHRONIZATION', [['sync', 'Sync'], ['conflicts', 'Conflicts'], ['audit', 'Audit']]],
+  ['COMMAND', [['command-center', 'Command Center'], ['tracking', 'Tracking map'], ['expeditions', 'Expeditions'], ['demo-operations', 'Operations'], ['bases', 'Polar bases'], ['transport', 'Transport']]],
+  ['LOGISTICS', [['demo-cargo', 'Cargo manifest'], ['cargo', 'Cargo records'], ['inventory', 'Inventory'], ['personnel', 'Personnel']]],
+  ['RESPONSE', [['incidents', 'Incidents'], ['ai-operations', 'AI Operations'], ['recommendations', 'Recommendations'], ['approvals', 'Approvals']]],
+  ['SYNCHRONIZATION', [['sync', 'Sync'], ['conflicts', 'Conflicts'], ['demo-history', 'Notifications & history'], ['audit', 'Audit']]],
   ['ADMINISTRATION', [['users', 'Users & Roles']]],
 ]
 export function Sidebar({ activeRoute, onNavigate, incidentCount = 0, pendingApprovalCount = 0 }: SidebarProps) {

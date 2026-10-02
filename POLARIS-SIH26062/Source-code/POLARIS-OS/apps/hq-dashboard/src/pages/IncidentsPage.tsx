@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Incident, Personnel, Station, TransportLeg } from '../types'
 import { StatusPill, formatStatusLabel } from '../components/common/StatusPill'
@@ -7,6 +7,7 @@ import { apiPost, ApiError } from '../services/api'
 import { isSupportedIndianStation, recordLabel, stationLabelByReference, transportLabelById } from '../utils/display'
 import { Timestamp } from '../components/common/Timestamp'
 import { TechnicalDetails } from '../components/common/TechnicalDetails'
+import { demoOperationsStore } from '../services/operations-demo'
 
 type IncidentsPageProps = {
   incidents: Incident[]
@@ -19,6 +20,7 @@ type IncidentsPageProps = {
 }
 
 export function IncidentsPage({ incidents, dataError, stations, transportLegs, personnel, onRefresh, currentUserId }: IncidentsPageProps) {
+  useEffect(()=>{const id=sessionStorage.getItem('polaris_api_incident_focus');if(id){document.getElementById(`api-incident-${id}`)?.scrollIntoView({block:'center',behavior:'smooth'});sessionStorage.removeItem('polaris_api_incident_focus')}},[])
   const [showForm, setShowForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -57,6 +59,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
         status: 'declared',
       })
 
+      demoOperationsStore.recordIncident(`${severity.toUpperCase()} ${type.replace(/_/g,' ')} incident declared${stationId?` at ${stationLabelByReference(stationId,stations)}`:''}.`, currentUserId)
       setFormSuccess('Incident logged and declared successfully.')
       setDescription('')
       setShowForm(false)
@@ -139,7 +142,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
                   <option value="">NONE</option>
                   {transportLegs.map((l) => (
                     <option key={l.leg_id} value={l.leg_id}>
-                      {recordLabel(l.code, l.leg_id)} ({stationLabelByReference(l.origin, stations, 'origin')} → {stationLabelByReference(l.destination, stations, 'destination')})
+                      {recordLabel(l.code, l.leg_id)} ({stationLabelByReference(l.origin, stations, 'origin')} â†’ {stationLabelByReference(l.destination, stations, 'destination')})
                     </option>
                   ))}
                 </select>
@@ -160,7 +163,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
 
               <div className="form-actions full-width">
                 <button type="submit" className="btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? 'SUBMITTING…' : 'SUBMIT INCIDENT DECLARATION'}
+                  {isSubmitting ? 'SUBMITTINGâ€¦' : 'SUBMIT INCIDENT DECLARATION'}
                 </button>
               </div>
             </form>
@@ -172,7 +175,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
             <EmptyState message="No incidents declared in the current expedition operational log." />
           ) : (
             <div className="table-scroll"><table><thead><tr><th>Incident reference</th><th>Type</th><th>Severity</th><th>Description</th><th>Station</th><th>Transport</th><th>Status</th><th>Declared by</th><th>Created</th></tr></thead><tbody>
-              {incidents.map((inc) => { const declarer = personnel.find((person) => person.user_id === inc.declared_by || person.person_id === inc.declared_by); const declaredBy = recordLabel(declarer?.name || [declarer?.first_name, declarer?.last_name].filter(Boolean).join(' '), declarer?.employee_code || inc.declared_by, 'Not provided'); const station = stations.find((item) => item.station_id === inc.station_id); const stationMapped = station ? isSupportedIndianStation(station) : true; const stationDisplay = station ? (stationMapped ? station.name : 'Station mapping unavailable') : inc.station_id ? 'Station mapping unavailable' : 'Not provided'; return <tr key={inc.incident_id}><td>{recordLabel(null, inc.incident_id)}<TechnicalDetails fields={[{ label: 'Incident ID', value: inc.incident_id }, { label: 'Declared by ID', value: inc.declared_by }, { label: 'Station mapping', value: station ? stationMapped ? undefined : 'Station mapping unavailable' : inc.station_id ? 'Station mapping unavailable' : undefined }, { label: 'Station ID', value: inc.station_id }, { label: 'Transport reference', value: inc.leg_id }]} /></td><td>{formatStatusLabel(inc.type)}</td><td><StatusPill status={inc.severity} /></td><td>{inc.description || 'Not provided'}</td><td>{stationDisplay}</td><td>{transportLabelById(inc.leg_id, transportLegs)}</td><td><StatusPill status={inc.status} /></td><td>{declaredBy}</td><td><Timestamp value={inc.declared_at} compact /></td></tr>})}
+              {incidents.map((inc) => { const declarer = personnel.find((person) => person.user_id === inc.declared_by || person.person_id === inc.declared_by); const declaredBy = recordLabel(declarer?.name || [declarer?.first_name, declarer?.last_name].filter(Boolean).join(' '), declarer?.employee_code || inc.declared_by, 'Not provided'); const station = stations.find((item) => item.station_id === inc.station_id); const stationMapped = station ? isSupportedIndianStation(station) : true; const stationDisplay = station ? (stationMapped ? station.name : 'Station mapping unavailable') : inc.station_id ? 'Station mapping unavailable' : 'Not provided'; return <tr id={`api-incident-${inc.incident_id}`} key={inc.incident_id}><td>{recordLabel(null, inc.incident_id)}<TechnicalDetails fields={[{ label: 'Incident ID', value: inc.incident_id }, { label: 'Declared by ID', value: inc.declared_by }, { label: 'Station mapping', value: station ? stationMapped ? undefined : 'Station mapping unavailable' : inc.station_id ? 'Station mapping unavailable' : undefined }, { label: 'Station ID', value: inc.station_id }, { label: 'Transport reference', value: inc.leg_id }]} /></td><td>{formatStatusLabel(inc.type)}</td><td><StatusPill status={inc.severity} /></td><td>{inc.description || 'Not provided'}</td><td>{stationDisplay}</td><td>{transportLabelById(inc.leg_id, transportLegs)}</td><td><StatusPill status={inc.status} /></td><td>{declaredBy}</td><td><Timestamp value={inc.declared_at} compact /></td></tr>})}
             </tbody></table></div>
           )}
         </div>
@@ -180,3 +183,4 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
     </div>
   )
 }
+

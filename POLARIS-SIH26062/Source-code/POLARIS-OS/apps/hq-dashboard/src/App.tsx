@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import { ApiError, apiGet, apiPatch, apiPost, getAuthToken, setAuthToken, setRefreshToken } from './services/api'
@@ -21,12 +21,14 @@ import { SyncOperationsPage } from './pages/SyncOperationsPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { UsersRolesPage } from './pages/UsersRolesPage'
 import { SyncConflictsPage } from './pages/SyncConflictsPage'
+import { AIOperationsPage, DemoBasesPage, DemoCargoPage, DemoHistoryPage, DemoOperationsPage, DemoPeopleSummary, IncidentSyncPanel } from './pages/DemoOperationsPages'
+import { AntarcticMap } from './components/map/AntarcticMap'
 import { redactDatabaseIds, stationLabelById } from './utils/display'
 
 type AuthUser = { user_id: string; employee_code?: string | null; full_name?: string | null; email?: string | null; role?: string | null; scope?: string | null; station_code?: string | null; station_id?: string | null }
-const routes = ['command-center', 'expeditions', 'transport', 'cargo', 'inventory', 'personnel', 'incidents', 'recommendations', 'approvals', 'sync', 'conflicts', 'audit', 'users']
+const routes = ['command-center', 'tracking', 'expeditions', 'demo-operations', 'bases', 'transport', 'demo-cargo', 'cargo', 'inventory', 'personnel', 'incidents', 'ai-operations', 'recommendations', 'approvals', 'sync', 'conflicts', 'demo-history', 'audit', 'users']
 const titles: Record<string, [string, string]> = {
-  'command-center': ['Command Center', 'Expedition operations overview'], expeditions: ['Expeditions', 'Mission status and planning'], transport: ['Transport', 'Movement and route operations'], cargo: ['Cargo', 'Manifest and traceability'], inventory: ['Inventory', 'Station supply levels'], personnel: ['Personnel', 'Roster and assignments'], incidents: ['Incidents', 'Operational incident log'], recommendations: ['Recommendations', 'Operational decision support'], approvals: ['Approvals', 'Formal decision records'], sync: ['Sync', 'Server-side field operation queue'], conflicts: ['Sync Conflicts', 'Inspect and resolve competing field changes'], audit: ['Audit', 'Canonical system activity'], users: ['Users & Roles', 'Accounts and authorization roles'],
+  'command-center': ['Command Center', 'Expedition operations overview'], tracking: ['Tracking', 'Ships, flights, cargo and route activity Â· demo movement is simulated'], expeditions: ['Expeditions', 'Mission status and planning'], 'demo-operations':['Operations','Mission execution, route, people and cargo Â· demo records'], bases:['Polar bases','NCPOR, Maitri, Bharati and Himadri Â· synthetic roster data'], transport: ['Transport', 'Movement and route operations'], 'demo-cargo':['Cargo Manifest','Air cargo, ship cargo and lifecycle Â· demo records'], cargo: ['Cargo', 'Manifest and traceability'], inventory: ['Inventory', 'Station supply levels'], personnel: ['Personnel', 'Roster and assignments'], incidents: ['Incidents', 'Operational incident log'], 'ai-operations':['AI Operations','Rule based readiness analysis and supervisor approval'], recommendations: ['Recommendations', 'Operational decision support'], approvals: ['Approvals', 'Formal decision records'], sync: ['Sync', 'Server-side field operation queue'], conflicts: ['Sync Conflicts', 'Inspect and resolve competing field changes'], 'demo-history':['Notifications & History','Events from local demonstration workflows'], audit: ['Audit', 'Canonical system activity'], users: ['Users & Roles', 'Accounts and authorization roles'],
 }
 function routeFromHash() { const value = window.location.hash.replace(/^#\/?/, ''); return routes.includes(value) ? value : 'command-center' }
 
@@ -151,7 +153,7 @@ export default function App() {
   const navigateTo = (route: string) => { const safe = routes.includes(route) ? route : 'command-center'; setActiveRoute(safe); window.location.hash = `/${safe}` }
   const closeImpact = useCallback(() => setImpact(null), [])
   const handleCancelLeg = async (legId: string) => {
-    setCancelingLegId(legId); setActionError(''); setActionErrorDetails(undefined); setActionMessage('Cancellation request pending…')
+    setCancelingLegId(legId); setActionError(''); setActionErrorDetails(undefined); setActionMessage('Cancellation request pendingâ€¦')
     try {
       await apiPatch(`/transport-legs/${legId}/status`, { status: 'cancelled' })
       setActionMessage('Cancellation completed. Refreshing transport data and requesting impact analysis.')
@@ -171,13 +173,13 @@ export default function App() {
   const openIncidentsCount = useMemo(() => incidents.filter((i) => !['resolved', 'closed'].includes((i.status ?? '').toLowerCase())).length, [incidents])
   const [title, subtitle] = titles[activeRoute] ?? titles['command-center']
 
-  if (authLoading) return <main className="auth-screen"><p role="status">Checking your session…</p></main>
+  if (authLoading) return <main className="auth-screen"><p role="status">Checking your sessionâ€¦</p></main>
   if (!user) return <main className="auth-screen"><form className="login-panel" onSubmit={handleLogin}>
-    <p className="eyebrow">POLARIS-OS · HEADQUARTERS</p><h1>Sign in</h1><p className="muted-text">Use your registered account to access expedition operations.</p>
+    <p className="eyebrow">POLARIS-OS Â· HEADQUARTERS</p><h1>Sign in</h1><p className="muted-text">Use your registered account to access expedition operations.</p>
     {authError && <div className="error-banner" role="alert">{authError}</div>}
     <label htmlFor="identity">Email or employee ID</label><input id="identity" className="text-input" autoComplete="username" value={identity} onChange={(event) => setIdentity(event.target.value)} required />
     <label htmlFor="password">Password</label><input id="password" className="text-input" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-    <button className="btn-primary" type="submit" disabled={loginLoading}>{loginLoading ? 'Signing in…' : 'Sign in'}</button>
+    <button className="btn-primary" type="submit" disabled={loginLoading}>{loginLoading ? 'Signing inâ€¦' : 'Sign in'}</button>
     <p className="form-note">Access and station scope come from your authenticated account. UI visibility does not replace server authorization.</p>
   </form></main>
 
@@ -192,22 +194,27 @@ export default function App() {
   return <div className="app-shell">
     <Sidebar activeRoute={activeRoute} onNavigate={navigateTo} incidentCount={openIncidentsCount} />
     <main className="main-content">
-      <Topbar title={title} subtitle={subtitle} connection={connection} lastRefresh={lastRefresh} isRefreshing={refreshing} user={{ ...user, scope: stationScope }} onRefresh={() => void loadAllData()} onLogout={logout} theme={theme} onToggleTheme={() => setTheme((old) => old === 'light' ? 'dark' : 'light')} />
-      <div className="demo-banner"><strong>DEMO ENVIRONMENT</strong><span>Synthetic demonstration data — not operational NCPOR data.</span></div>
+      <Topbar title={title} subtitle={subtitle} connection={connection} lastRefresh={lastRefresh} isRefreshing={refreshing} user={{ ...user, scope: stationScope }} onRefresh={() => void loadAllData()} onLogout={logout} theme={theme} onToggleTheme={() => setTheme((old) => old === 'light' ? 'dark' : 'light')} onNavigate={navigateTo} apiData={{stations,expeditions,cargoItems,personnel,incidents,transportLegs}} />
+      <div className="demo-banner"><strong>DEMO ENVIRONMENT</strong><span>Synthetic demonstration data â€” not operational NCPOR data.</span></div>
       {moduleErrors[activeRoute] && <ErrorBanner message={moduleErrors[activeRoute]} details={moduleErrorDetails[activeRoute]} onRetry={() => void loadAllData()} />}
       {actionError && <ErrorBanner message={actionError} details={actionErrorDetails} onRetry={() => activeRoute === 'transport' ? void loadAllData() : undefined} />}
       {actionMessage && <div className="notice-banner" role="status">{actionMessage}</div>}
       {loading ? <div className="page-container"><SkeletonLoader rows={6} height="32px" /></div> : <>
         {activeRoute === 'command-center' && <CommandCenter stations={stations} stationsError={dataErrors['/stations']} weatherError={dataErrors['/weather-events']} personnelError={dataErrors['/personnel']} assignmentsError={dataErrors['/personnel-assignments']} expeditions={expeditions} transportLegs={transportLegs} cargoItems={cargoItems} inventoryStocks={inventoryStocks} personnel={personnel} assignments={assignments} incidents={incidents} recommendations={recommendations} weatherEvents={weatherEvents} moduleErrors={moduleErrors} onViewImpact={handleImpactView} onNavigate={navigateTo} impactLoading={impactLoading} refreshMarker={lastRefresh} />}
+        {activeRoute === 'tracking' && <div className="page-container"><div className="demo-module-banner">DEMO / SIMULATED asset tracks move locally along planned routes. AIS data, when configured, is labeled separately.</div><section className="panel map-panel"><div className="panel-header"><div><p className="eyebrow">UNIFIED MOVEMENT MAP</p><h2>Polar network Â· operational view</h2></div></div><div className="map-body"><AntarcticMap stations={stations} transportLegs={transportLegs} incidents={incidents.filter(i=>!['resolved','closed'].includes((i.status||'').toLowerCase()))} onNavigate={navigateTo} /></div></section></div>}
         {activeRoute === 'expeditions' && <ExpeditionsPage expeditions={expeditions} dataError={dataErrors['/expeditions']} />}
+        {activeRoute === 'demo-operations' && <DemoOperationsPage onNavigate={navigateTo} actor={user.full_name||user.employee_code||'Authenticated operator'} />}
+        {activeRoute === 'bases' && <DemoBasesPage onNavigate={navigateTo} />}
         {activeRoute === 'transport' && <TransportPage transportLegs={transportLegs} dataError={dataErrors['/transport-legs']} cargoItems={cargoItems} personnel={personnel} assignments={assignments} stations={stations} onCancelLeg={handleCancelLeg} onViewImpact={handleImpactView} cancelingLegId={cancelingLegId} impactLoading={impactLoading} />}
         {activeRoute === 'cargo' && <CargoPage cargoItems={cargoItems} dataError={dataErrors['/cargo-items']} transportLegs={transportLegs} />}
+        {activeRoute === 'demo-cargo' && <DemoCargoPage onNavigate={navigateTo} />}
         {activeRoute === 'inventory' && <InventoryPage inventoryStocks={inventoryStocks} dataError={dataErrors['/inventory-stocks']} catalogError={dataErrors['/item-catalog']} stations={stations} itemCatalog={itemCatalog} />}
-        {activeRoute === 'personnel' && <PersonnelPage personnel={personnel} personnelError={dataErrors['/personnel']} assignmentsError={dataErrors['/personnel-assignments']} assignments={assignments} stations={stations} expeditions={expeditions} transportLegs={transportLegs} />}
-        {activeRoute === 'incidents' && <IncidentsPage incidents={incidents} dataError={dataErrors['/incidents']} stations={stations} transportLegs={transportLegs} personnel={personnel} onRefresh={() => void loadAllData()} currentUserId={user.user_id} />}
+        {activeRoute === 'personnel' && <><div className="page-container"><DemoPeopleSummary actor={user.full_name||user.employee_code||'Authenticated user'} role={user.role} /></div><PersonnelPage personnel={personnel} personnelError={dataErrors['/personnel']} assignmentsError={dataErrors['/personnel-assignments']} assignments={assignments} stations={stations} expeditions={expeditions} transportLegs={transportLegs} /></>}
+        {activeRoute === 'incidents' && <><div className="page-container"><IncidentSyncPanel /></div><IncidentsPage incidents={incidents} dataError={dataErrors['/incidents']} stations={stations} transportLegs={transportLegs} personnel={personnel} onRefresh={() => void loadAllData()} currentUserId={user.user_id} /></>}
         {activeRoute === 'recommendations' && <RecommendationsPage recommendations={recommendations} dataError={dataErrors['/recommendations']} onNavigate={navigateTo} />}
+        {activeRoute === 'ai-operations' && <AIOperationsPage actor={user.full_name||user.employee_code||'Authenticated supervisor'} role={user.role} />}
         {activeRoute === 'approvals' && <ApprovalsPage onRefresh={() => void loadAllData()} currentUserId={user.user_id} currentRole={user.role} />}
-        {activeRoute === 'sync' && <SyncOperationsPage />}{activeRoute === 'conflicts' && <SyncConflictsPage />}{activeRoute === 'audit' && <AuditLogPage />}{activeRoute === 'users' && <UsersRolesPage />}
+        {activeRoute === 'sync' && <SyncOperationsPage />}{activeRoute === 'conflicts' && <SyncConflictsPage />}{activeRoute === 'demo-history' && <DemoHistoryPage />}{activeRoute === 'audit' && <><DemoHistoryPage /><AuditLogPage /></>}{activeRoute === 'users' && <UsersRolesPage />}
       </>}
     </main>
     <ImpactModal impact={impact} stations={stations} onClose={closeImpact} />
