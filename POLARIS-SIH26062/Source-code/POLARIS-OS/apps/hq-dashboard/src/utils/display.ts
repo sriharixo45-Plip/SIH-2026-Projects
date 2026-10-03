@@ -14,36 +14,47 @@ export function recordLabel(humanLabel?: string | null, id?: string | null, fall
   return fallback
 }
 
-export function isSupportedIndianStation(station?: Pick<Station, 'name' | 'code'> | null): boolean {
-  if (!station) return false
-  const name = (station.name || '').trim().toLowerCase()
-  const code = (station.code || '').trim().toLowerCase()
-  if (name) return name === 'maitri' || name === 'bharati'
-  return code === 'maitri' || code === 'bharati'
+export type CanonicalStation = 'NCPOR' | 'Maitri' | 'Bharati' | 'Himadri'
+
+const stationAliases: Record<CanonicalStation, string[]> = {
+  NCPOR: ['NCPOR', 'CENTRAL OPERATIONS', 'CENTRAL OPS', 'NATIONAL CENTRE FOR POLAR AND OCEAN RESEARCH'],
+  Maitri: ['MAITRI', 'MAITRI STATION', 'MAITRI BASE'],
+  Bharati: ['BHARATI', 'BHARATI STATION', 'BHARATI BASE'],
+  Himadri: ['HIMADRI', 'HIMADRI STATION', 'HIMADRI BASE'],
 }
 
-function supportedStationLabel(station: Pick<Station, 'name' | 'code'>): string {
-  const name = (station.name || '').trim().toLowerCase()
-  const code = (station.code || '').trim().toLowerCase()
-  return name === 'maitri' || code === 'maitri' ? 'Maitri' : 'Bharati'
+function stationToken(value?: string | null): string {
+  return (value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+export function canonicalStationName(station?: Pick<Station, 'name' | 'code'> | string | null): CanonicalStation | null {
+  const values = typeof station === 'string' ? [station] : [station?.code, station?.name]
+  const tokens = values.map(stationToken).filter(Boolean)
+  for (const [canonical, aliases] of Object.entries(stationAliases) as [CanonicalStation, string[]][]) {
+    if (aliases.some((alias) => tokens.includes(stationToken(alias)))) return canonical
+  }
+  return null
+}
+
+export function isSupportedIndianStation(station?: Pick<Station, 'name' | 'code'> | null): boolean {
+  const canonical = canonicalStationName(station)
+  return canonical === 'Maitri' || canonical === 'Bharati'
 }
 
 export function stationLabelById(stationId: string | null | undefined, stations: Station[]): string {
-  if (!stationId) return 'Station mapping unavailable'
+  if (!stationId) return 'Station reference unavailable'
   const station = stations.find((item) => item.station_id === stationId)
-  if (!station) return 'Station mapping unavailable'
-  if (!isSupportedIndianStation(station)) return `${recordLabel(station.name, station.code || station.station_id, 'Unnamed station')} — Unmapped Station`
-  return supportedStationLabel(station)
+  if (!station) return 'Station reference unavailable'
+  return canonicalStationName(station) || 'Station reference data requires reconciliation'
 }
 
 export function stationLabelByReference(reference: string | null | undefined, stations: Station[], endpoint: 'origin' | 'destination' = 'origin'): string {
   if (!reference) return `${endpoint === 'origin' ? 'Origin' : 'Destination'} unavailable`
   const normalized = reference.trim().toLowerCase()
   const station = stations.find((item) => item.station_id === reference || (item.name || '').trim().toLowerCase() === normalized || (item.code || '').trim().toLowerCase() === normalized)
-  if (station) return isSupportedIndianStation(station) ? supportedStationLabel(station) : `${recordLabel(station.name, station.code || station.station_id, 'Unnamed station')} — Unmapped Station`
-  if (isDatabaseId(reference)) return 'Station mapping unavailable'
-  if (normalized === 'maitri' || normalized === 'bharati') return reference
-  return `${reference} — Unmapped Station`
+  if (station) return canonicalStationName(station) || 'Station reference data requires reconciliation'
+  if (isDatabaseId(reference)) return 'Station reference unavailable'
+  return canonicalStationName(reference) || 'Station reference data requires reconciliation'
 }
 
 export function transportLabelById(legId: string | null | undefined, legs: TransportLeg[]): string {

@@ -1,3 +1,5 @@
+import { POLAR_STATION_REFERENCES } from '../data/polar-stations'
+
 export type Geo = { lat: number; lon: number }
 export type OperationalStatus = 'IN TRANSIT' | 'PLANNED' | 'ARRIVED' | 'DELAYED' | 'EXCEPTION'
 export type DemoAsset = {
@@ -20,10 +22,10 @@ export type DemoCargo = {
 export const cargoCategories=['Scientific Equipment','Research Samples','Food & Provisions','Fuel','Medical Supplies','Machinery','Spare Parts','Communication Equipment','Power Equipment','Emergency Supplies','Return Cargo']
 
 export const demoBases = [
-  { id: 'NCPOR', name: 'NCPOR / Central Operations', region: 'Goa, India', point: { lat: 15.4909, lon: 73.8278 } },
-  { id: 'MAITRI', name: 'Maitri', region: 'Queen Maud Land', point: { lat: -70.7668, lon: 11.7342 } },
-  { id: 'BHARATI', name: 'Bharati', region: 'Larsemann Hills', point: { lat: -69.4068, lon: 76.1953 } },
-  { id: 'HIMADRI', name: 'Himadri', region: 'Svalbard, Arctic', point: { lat: 78.9232, lon: 11.9233 } },
+  { id: 'NCPOR', name: POLAR_STATION_REFERENCES.ncpor.name, region: POLAR_STATION_REFERENCES.ncpor.region, point: { lat: POLAR_STATION_REFERENCES.ncpor.point.latitude, lon: POLAR_STATION_REFERENCES.ncpor.point.longitude } },
+  { id: 'MAITRI', name: POLAR_STATION_REFERENCES.maitri.name, region: 'Queen Maud Land', point: { lat: POLAR_STATION_REFERENCES.maitri.point.latitude, lon: POLAR_STATION_REFERENCES.maitri.point.longitude } },
+  { id: 'BHARATI', name: POLAR_STATION_REFERENCES.bharati.name, region: 'Larsemann Hills', point: { lat: POLAR_STATION_REFERENCES.bharati.point.latitude, lon: POLAR_STATION_REFERENCES.bharati.point.longitude } },
+  { id: 'HIMADRI', name: POLAR_STATION_REFERENCES.himadri.name, region: POLAR_STATION_REFERENCES.himadri.region, point: { lat: POLAR_STATION_REFERENCES.himadri.point.latitude, lon: POLAR_STATION_REFERENCES.himadri.point.longitude } },
 ]
 
 export const demoOperations = [
@@ -35,11 +37,11 @@ export const demoIncidents:DemoIncident[]=[{id:'INC-DEMO-2606',operationId:'OPS-
 
 const seaRoute: Geo[] = [
   { lat: -34.0, lon: 18.4 }, { lat: -43.5, lon: 23.0 }, { lat: -52.0, lon: 31.0 },
-  { lat: -58.0, lon: 38.0 }, { lat: -62.5, lon: 51.0 }, { lat: -66.2, lon: 66.0 }, { lat: -69.4068, lon: 76.1953 },
+  { lat: -58.0, lon: 38.0 }, { lat: -62.5, lon: 51.0 }, { lat: -66.2, lon: 66.0 }, { lat: POLAR_STATION_REFERENCES.bharati.point.latitude, lon: POLAR_STATION_REFERENCES.bharati.point.longitude },
 ]
 const airRoute: Geo[] = [
   { lat: -33.97, lon: 18.60 }, { lat: -45.0, lon: 28.0 }, { lat: -55.0, lon: 41.0 },
-  { lat: -63.0, lon: 57.0 }, { lat: -69.4068, lon: 76.1953 },
+  { lat: -63.0, lon: 57.0 }, { lat: POLAR_STATION_REFERENCES.bharati.point.latitude, lon: POLAR_STATION_REFERENCES.bharati.point.longitude },
 ]
 function routeHistory(route: Geo[], progress: number) {
   return route.slice(0, Math.max(2, Math.ceil(route.length * progress))).map((point, index) => ({ point, at: new Date(Date.now() - (route.length - index) * 3_600_000).toISOString() }))

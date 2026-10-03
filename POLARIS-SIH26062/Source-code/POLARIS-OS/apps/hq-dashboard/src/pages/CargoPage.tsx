@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CargoItem, CargoMovementEvent } from '../types'
 import { StatusPill, formatStatusLabel } from '../components/common/StatusPill'
 import { EmptyState } from '../components/common/EmptyState'
-import { apiGet } from '../services/api'
+import { apiGet, apiPatch, ApiError } from '../services/api'
 import type { TransportLeg } from '../types'
 import { recordLabel, transportLabelById, redactDatabaseIds } from '../utils/display'
 
@@ -10,9 +10,19 @@ type CargoPageProps = {
   cargoItems: CargoItem[]
   dataError?: string
   transportLegs: TransportLeg[]
+  currentUserId?: string
+  onRefresh?: () => void
 }
 
-export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPageProps) {
+const cargoTransitions: Record<string, string[]> = {
+  packed: ['in_transit', 'in_storage_at_station', 'damaged', 'returned'],
+  in_transit: ['in_storage_at_station', 'delivered', 'damaged', 'returned'],
+  in_storage_at_station: ['delivered', 'damaged', 'returned'],
+  delivered: ['returned'], damaged: ['returned'], returned: [],
+}
+const cargoTransitionOptions = (status?: string | null) => cargoTransitions[(status ?? '').toLowerCase().replaceAll('-', '_')] ?? []
+
+export function CargoPage({ cargoItems, dataError, transportLegs, currentUserId, onRefresh }: CargoPageProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [hazardFilter, setHazardFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -20,6 +30,21 @@ export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPagePro
   const [movementEvents, setMovementEvents] = useState<CargoMovementEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [eventsError, setEventsError] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState('')
+  const [statusNotice, setStatusNotice] = useState('')
+  const [updatingCargoId, setUpdatingCargoId] = useState<string | null>(null)
+
+  const updateStatus = async (cargo: CargoItem, status: string) => {
+    if (!currentUserId) { setStatusError('Authenticated user identity is unavailable.'); return }
+    setUpdatingCargoId(cargo.cargo_id); setStatusError(''); setStatusNotice('')
+    try {
+      await apiPatch(`/cargo-items/${cargo.cargo_id}/status`, { status, actor: currentUserId })
+      setStatusNotice(`Cargo ${cargo.tracking_code || cargo.cargo_id} status saved. Movement event recorded.`)
+      onRefresh?.()
+    } catch (cause) {
+      setStatusError(cause instanceof ApiError && cause.status === 403 ? 'The server denied this cargo status change.' : cause instanceof Error ? cause.message : 'Cargo status could not be saved.')
+    } finally { setUpdatingCargoId(null) }
+  }
 
   const filteredItems = useMemo(() => {
     return cargoItems.filter((item) => {
@@ -30,7 +55,7 @@ export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPagePro
         (item.category ?? '').toLowerCase().includes(query)
       const normalizedHazard = String(item.hazard_class ?? '').toLowerCase()
       const matchesHazard = hazardFilter === 'all' || (hazardFilter === 'non-hazardous' ? item.hazard_class == null || normalizedHazard === 'non-hazardous' : normalizedHazard === hazardFilter)
-      const matchesStatus = statusFilter === 'all' || (item.status ?? '').toLowerCase() === statusFilter
+      const matchesStatus = statusFilter === 'all' || (item.status ?? '').toLowerCase().replaceAll('-', '_') === statusFilter
 
       return matchesQuery && matchesHazard && matchesStatus
     })
@@ -99,6 +124,7 @@ export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPagePro
           </div>
         </div>
 
+        {statusError && <div className="error-banner" role="alert">{statusError}</div>}{statusNotice && <div className="notice-banner" role="status">{statusNotice}</div>}
         <div className="panel-body cargo-panel-body">
           {dataError ? <div className="unavailable-state" role="status">Cargo data unavailable. {dataError}</div> : filteredItems.length === 0 ? (
             <EmptyState message="No cargo items found matching the current search criteria." />
@@ -106,13 +132,14 @@ export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPagePro
             <>
               <div className="table-scroll cargo-table-scroll">
                 <table className="cargo-table">
-                  <thead><tr><th scope="col">Tracking</th><th scope="col">Description</th><th scope="col">Status</th><th scope="col">Hazard</th></tr></thead>
+                  <thead><tr><th scope="col">Tracking</th><th scope="col">Description</th><th scope="col">Transport</th><th scope="col">Status</th><th scope="col">Hazard</th></tr></thead>
                   <tbody>
                     {filteredItems.map((cargo) => (
                       <tr key={cargo.cargo_id} className={selectedCargo?.cargo_id === cargo.cargo_id ? 'cargo-table-row selected' : 'cargo-table-row'} aria-selected={selectedCargo?.cargo_id === cargo.cargo_id}>
                         <td><button type="button" className="cargo-select" aria-pressed={selectedCargo?.cargo_id === cargo.cargo_id} aria-label={`Show details for ${recordLabel(cargo.tracking_code, cargo.cargo_id)}`} onClick={() => setSelectedCargoId(cargo.cargo_id)}><span className="mono-code">{recordLabel(cargo.tracking_code, cargo.cargo_id)}</span></button></td>
                         <td><strong className="cargo-description">{redactDatabaseIds(cargo.description ?? 'Description not provided')}</strong></td>
-                        <td><StatusPill status={cargo.status} /></td>
+                        <td>{cargo.leg_id ? `${transportLegs.find((leg) => leg.leg_id === cargo.leg_id)?.mode || 'Mode unavailable'} · ${transportLabelById(cargo.leg_id, transportLegs)}` : 'Transport unavailable'}</td>
+                        <td><StatusPill status={cargo.status} />{cargoTransitionOptions(cargo.status).length > 0 && <select className="select-input" aria-label={`Change cargo status for ${cargo.tracking_code || cargo.cargo_id}`} value="" disabled={updatingCargoId === cargo.cargo_id} onChange={(event) => { if (event.target.value) void updateStatus(cargo, event.target.value) }}><option value="">{updatingCargoId === cargo.cargo_id ? 'Saving…' : 'Change status'}</option>{cargoTransitionOptions(cargo.status).map((status) => <option key={status} value={status}>{formatStatusLabel(status)}</option>)}</select>}</td>
                         <td><span className={`hazard-badge ${cargo.hazard_class != null ? 'hazard-active' : 'hazard-none'}`}>{cargo.hazard_class != null ? `CLASS ${cargo.hazard_class}` : 'Hazard not provided'}</span></td>
                       </tr>
                     ))}
@@ -137,7 +164,7 @@ export function CargoPage({ cargoItems, dataError, transportLegs }: CargoPagePro
               <div className="cargo-detail-field"><dt>Category</dt><dd>{selectedCargo.category ? formatStatusLabel(selectedCargo.category) : 'Not provided'}</dd></div>
               <div className="cargo-detail-field"><dt>Weight</dt><dd>{selectedCargo.weight != null ? `${selectedCargo.weight} kg` : 'Not provided'}</dd></div>
               <div className="cargo-detail-field"><dt>Hazard</dt><dd>{selectedCargo.hazard_class != null ? `CLASS ${selectedCargo.hazard_class}` : 'Not provided'}</dd></div>
-              <div className="cargo-detail-field"><dt>Transport leg</dt><dd className="mono-code">{selectedCargo.leg_id ? transportLabelById(selectedCargo.leg_id, transportLegs) : 'Transport unavailable'}</dd></div>
+              <div className="cargo-detail-field"><dt>Transport leg / mode</dt><dd className="mono-code">{selectedCargo.leg_id ? `${transportLegs.find((leg) => leg.leg_id === selectedCargo.leg_id)?.mode || 'Mode unavailable'} · ${transportLabelById(selectedCargo.leg_id, transportLegs)}` : 'Transport unavailable'}</dd></div>
             </dl>
             <section className="cargo-movement" aria-labelledby="cargo-movement-title">
               <h3 id="cargo-movement-title">Movement history</h3>

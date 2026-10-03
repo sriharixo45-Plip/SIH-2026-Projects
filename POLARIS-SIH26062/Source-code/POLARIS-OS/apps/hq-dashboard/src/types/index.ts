@@ -162,6 +162,7 @@ export type Incident = {
 
 export type Recommendation = {
   recommendation_id?: string
+  approval_id?: string | null
   recommendation_type?: string | null
   trigger_type?: string | null
   trigger_id?: string | null

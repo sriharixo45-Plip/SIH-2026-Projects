@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Incident, Personnel, Station, TransportLeg } from '../types'
 import { StatusPill, formatStatusLabel } from '../components/common/StatusPill'
@@ -7,7 +7,6 @@ import { apiPost, ApiError } from '../services/api'
 import { isSupportedIndianStation, recordLabel, stationLabelByReference, transportLabelById } from '../utils/display'
 import { Timestamp } from '../components/common/Timestamp'
 import { TechnicalDetails } from '../components/common/TechnicalDetails'
-import { demoOperationsStore } from '../services/operations-demo'
 
 type IncidentsPageProps = {
   incidents: Incident[]
@@ -59,7 +58,6 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
         status: 'declared',
       })
 
-      demoOperationsStore.recordIncident(`${severity.toUpperCase()} ${type.replace(/_/g,' ')} incident declared${stationId?` at ${stationLabelByReference(stationId,stations)}`:''}.`, currentUserId)
       setFormSuccess('Incident logged and declared successfully.')
       setDescription('')
       setShowForm(false)
@@ -142,7 +140,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
                   <option value="">NONE</option>
                   {transportLegs.map((l) => (
                     <option key={l.leg_id} value={l.leg_id}>
-                      {recordLabel(l.code, l.leg_id)} ({stationLabelByReference(l.origin, stations, 'origin')} â†’ {stationLabelByReference(l.destination, stations, 'destination')})
+                      {recordLabel(l.code, l.leg_id)} ({stationLabelByReference(l.origin, stations, 'origin')} → {stationLabelByReference(l.destination, stations, 'destination')})
                     </option>
                   ))}
                 </select>
@@ -163,7 +161,7 @@ export function IncidentsPage({ incidents, dataError, stations, transportLegs, p
 
               <div className="form-actions full-width">
                 <button type="submit" className="btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? 'SUBMITTINGâ€¦' : 'SUBMIT INCIDENT DECLARATION'}
+                  {isSubmitting ? 'SUBMITTING…' : 'SUBMIT INCIDENT DECLARATION'}
                 </button>
               </div>
             </form>

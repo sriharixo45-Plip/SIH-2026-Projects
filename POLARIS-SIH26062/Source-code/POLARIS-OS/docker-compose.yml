@@ -48,6 +48,8 @@ services:
     build:
       context: .
       dockerfile: apps/hq-dashboard/Dockerfile
+      args:
+        VITE_OSM_TILE_URL: ${VITE_OSM_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
     ports:
       - "${HQ_PORT:-8080}:80"
     depends_on:

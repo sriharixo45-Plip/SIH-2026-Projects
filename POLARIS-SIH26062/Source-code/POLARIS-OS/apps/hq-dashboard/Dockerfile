@@ -6,6 +6,8 @@ COPY apps/hq-dashboard/package.json ./apps/hq-dashboard/package.json
 RUN npm ci
 COPY apps/hq-dashboard ./apps/hq-dashboard
 WORKDIR /workspace/apps/hq-dashboard
+ARG VITE_OSM_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
+ENV VITE_OSM_TILE_URL=${VITE_OSM_TILE_URL}
 RUN npm run build
 
 FROM nginx:1.27-alpine
