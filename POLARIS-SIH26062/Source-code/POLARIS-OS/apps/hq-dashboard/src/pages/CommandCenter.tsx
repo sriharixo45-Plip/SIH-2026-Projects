@@ -5,104 +5,517 @@ import { EmptyState } from '../components/common/EmptyState'
 import { AntarcticMap } from '../components/map/AntarcticMap'
 import { apiGet, ApiError } from '../services/api'
 import { ErrorBanner } from '../components/common/ErrorBanner'
-import { canonicalStationName, formatDateTime, isSupportedIndianStation, recordLabel, safeReference, stationLabelById, stationLabelByReference, redactDatabaseIds } from '../utils/display'
+import { canonicalStationName, formatDateTime, isSupportedIndianStation, recordLabel, safeReference, stationLabelById, stationLabelByReference } from '../utils/display'
 import { demoOperationsStore } from '../services/operations-demo'
 
 type Props = {
-  stations: Station[]; stationsError?: string; weatherError?: string; personnelError?: string; assignmentsError?: string; expeditions: Expedition[]; transportLegs: TransportLeg[]; cargoItems: CargoItem[]; resources?: TransportResource[]
-  inventoryStocks: InventoryStock[]; personnel: Personnel[]; assignments: PersonnelAssignment[]
-  incidents: Incident[]; recommendations: Recommendation[]; weatherEvents: WeatherEvent[]
-  moduleErrors: Record<string, string>; onViewImpact: (id: string) => Promise<void>
-  onNavigate: (route: string) => void; impactLoading: boolean; refreshMarker: string | null
+  stations: Station[]
+  stationsError?: string
+  weatherError?: string
+  personnelError?: string
+  assignmentsError?: string
+  expeditions: Expedition[]
+  transportLegs: TransportLeg[]
+  cargoItems: CargoItem[]
+  resources?: TransportResource[]
+  inventoryStocks: InventoryStock[]
+  personnel: Personnel[]
+  assignments: PersonnelAssignment[]
+  incidents: Incident[]
+  recommendations: Recommendation[]
+  weatherEvents: WeatherEvent[]
+  moduleErrors: Record<string, string>
+  onViewImpact: (id: string) => Promise<void>
+  onNavigate: (route: string) => void
+  impactLoading: boolean
+  refreshMarker: string | null
 }
 
-export function CommandCenter({ stations, stationsError, weatherError, personnelError, assignmentsError, expeditions, transportLegs, cargoItems, resources = [], inventoryStocks, personnel, assignments, incidents, recommendations, weatherEvents, moduleErrors, onViewImpact, onNavigate, impactLoading, refreshMarker }: Props) {
-  const demoState=useSyncExternalStore(demoOperationsStore.subscribe,demoOperationsStore.getState,demoOperationsStore.getState)
+export function CommandCenter({
+  stations,
+  stationsError,
+  weatherError: _weatherError,
+  personnelError: _personnelError,
+  assignmentsError: _assignmentsError,
+  expeditions,
+  transportLegs,
+  cargoItems,
+  resources = [],
+  inventoryStocks: _inventoryStocks,
+  personnel,
+  assignments,
+  incidents,
+  recommendations: _recommendations,
+  weatherEvents: _weatherEvents,
+  moduleErrors,
+  onViewImpact,
+  onNavigate,
+  impactLoading,
+  refreshMarker,
+}: Props) {
+  const demoState = useSyncExternalStore(demoOperationsStore.subscribe, demoOperationsStore.getState, demoOperationsStore.getState)
   const indianStations = stations.filter(isSupportedIndianStation)
   const unmappedStationCount = stations.filter((station) => !canonicalStationName(station)).length
+
   const [auditRows, setAuditRows] = useState<AuditLog[]>([])
   const [auditLoading, setAuditLoading] = useState(true)
   const [auditError, setAuditError] = useState('')
   const [auditErrorDetails, setAuditErrorDetails] = useState<{ status?: number; endpoint?: string; requestId?: string; body?: string }>()
+
   const activeExpeditions = expeditions.filter((item) => !['cancelled', 'completed', 'closed'].includes((item.status ?? '').toLowerCase()))
   const openIncidents = incidents.filter((item) => !['resolved', 'closed'].includes((item.status ?? '').toLowerCase()))
   const attentionLegs = transportLegs.filter((leg) => ['delayed', 'cancelled', 'diverted', 'failed', 'disrupted'].includes((leg.status ?? '').toLowerCase()))
-  const inventoryExceptions = inventoryStocks.filter((item) => item.quantity != null && item.reorder_threshold != null && Number.isFinite(Number(item.quantity)) && Number(item.quantity) < Number(item.reorder_threshold))
-  const pendingRecommendations = recommendations.filter((item) => ['pending', 'in_review', 'requires_approval'].includes((item.status ?? '').toLowerCase()))
 
   useEffect(() => {
     let mounted = true
-    apiGet<AuditLog[]>('/audit-logs').then((rows) => {
-      if (!mounted) return
-      setAuditRows(Array.isArray(rows) ? rows : [])
-      setAuditError('')
-    }).catch((error) => {
-      if (!mounted) return
-      setAuditRows([])
-      setAuditError(error instanceof Error ? error.message : 'Audit records unavailable.')
-      if (error instanceof ApiError) setAuditErrorDetails({ status: error.status, endpoint: error.endpoint, requestId: error.requestId, body: error.technicalDetails })
-    }).finally(() => { if (mounted) setAuditLoading(false) })
-    return () => { mounted = false }
+    apiGet<AuditLog[]>('/audit-logs')
+      .then((rows) => {
+        if (!mounted) return
+        setAuditRows(Array.isArray(rows) ? rows : [])
+        setAuditError('')
+      })
+      .catch((error) => {
+        if (!mounted) return
+        setAuditRows([])
+        setAuditError(error instanceof Error ? error.message : 'Audit records unavailable.')
+        if (error instanceof ApiError) {
+          setAuditErrorDetails({
+            status: error.status,
+            endpoint: error.endpoint,
+            requestId: error.requestId,
+            body: error.technicalDetails,
+          })
+        }
+      })
+      .finally(() => {
+        if (mounted) setAuditLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
   }, [refreshMarker])
 
-  const demoOperations=demoState.operations.filter(operation=>operation.status!=='COMPLETED')
-  const demoMoving=demoState.assets.filter(asset=>asset.status==='IN TRANSIT')
-  const demoAvailable=demoState.employees.filter(person=>person.availability==='AVAILABLE')
-  const demoCargoTransit=demoState.cargo.filter(item=>['DISPATCHED','IN TRANSIT','ARRIVED'].includes(item.status))
-  const demoIncidents=demoState.incidents.filter(item=>!['RESOLVED','CLOSED'].includes(item.status))
-  const pendingDemoRecommendations=demoState.recommendations.filter(item=>item.status==='PENDING APPROVAL').length
-  const pendingDemoSchedules=demoState.scheduleRequests.filter(item=>item.status==='PENDING APPROVAL').length
-  const demoPending=pendingDemoRecommendations+pendingDemoSchedules
-  const demoApprovalRoute=pendingDemoRecommendations?'ai-operations':pendingDemoSchedules?'personnel':'ai-operations'
-  const demoMetrics = [
-    ['Active operations \u00b7 demo', demoOperations.length, 'demo-operations'],
-    ['Assets moving \u00b7 demo', demoMoving.length, 'tracking'],
-    ['Personnel available \u00b7 demo', demoAvailable.length, 'personnel'],
-    ['Cargo in transit \u00b7 demo', demoCargoTransit.length, 'demo-cargo'],
-    ['Active incidents \u00b7 demo', demoIncidents.length, 'incidents'],
-    ['Pending approvals \u00b7 demo', demoPending, demoApprovalRoute],
-  ] as const
-  const apiMetrics = [
-    ['Active expeditions · API', activeExpeditions.length, 'demo-operations', 'expeditions'],
-    ['Transport legs · API', transportLegs.length, 'transport', 'transport'],
-    ['Personnel assignments · API', assignments.length, 'personnel', 'personnel'],
-    ['Cargo records · API', cargoItems.length, 'cargo', 'cargo'],
-    ['Open incidents · API', openIncidents.length, 'incidents', 'incidents'],
-    ['Pending recommendations · API', pendingRecommendations.length, 'recommendations', 'recommendations'],
-  ] as const
+  const demoMoving = demoState.assets.filter((asset) => asset.status === 'IN TRANSIT')
+  const totalTrackedAssets = demoState.assets.length + (resources.length || 0)
+  const isApiDegraded = !!stationsError || !!moduleErrors.expeditions || !!moduleErrors.transport || !!moduleErrors.incidents
 
-  return <div className="page-container command-dashboard">
-    <section className="operations-hero">
-      <div className="operations-hero-copy"><p className="eyebrow">POLAR OPERATIONS INTELLIGENCE · DEMONSTRATION DATA</p><h2>One operational view<br />for a changing frontier.</h2><p>Movement, people, cargo and mission status across the polar network—together in one place.</p><div className="hero-context"><span>SEASON {activeExpeditions[0]?.season || '2026–27'}</span><span>{indianStations.length} BASE RECORDS</span><span>HQ · NCPOR</span></div></div>
-      <div className="hero-stamp"><span className="hero-orbit" aria-hidden="true">✳</span><span>POLAR<br />OPERATIONS<br />SYSTEM</span><small>INDIA · SOUTHERN OCEAN</small></div>
-    </section>
-    <section className="context-strip">
-      <div><span className="eyebrow">EXPEDITION CONTEXT</span><strong>{recordLabel(activeExpeditions[0]?.name || activeExpeditions[0]?.code, activeExpeditions[0]?.expedition_id, activeExpeditions.length ? 'Unresolved expedition record' : 'No active expedition data')}</strong></div>
-      <div><span className="eyebrow">OPERATIONAL PERIOD</span><strong>{activeExpeditions[0]?.season || 'Not provided by API'}</strong></div>
-      <div><span className="eyebrow">ANTARCTIC STATIONS</span><strong>{stationsError ? 'Station data unavailable' : indianStations.length ? indianStations.map((station) => stationLabelById(station.station_id, stations)).join(', ') : stations.length ? 'Station reference data requires reconciliation' : 'Station reference data unavailable'}</strong></div>
-      <span className="provenance-tag">Backend data</span>
-    </section>
-    {unmappedStationCount > 0 && <div className="unavailable-state" role="status">Station reference data requires reconciliation for {unmappedStationCount} API record{unmappedStationCount === 1 ? '' : 's'}.</div>}
-    <section className="panel map-panel"><div className="panel-header"><div><p className="eyebrow">MOVEMENT · POLAR NETWORK</p><h2>Operational map</h2><p className="data-note">API-backed records with separately labeled simulated vehicles</p></div><button type="button" className="btn-secondary" onClick={()=>onNavigate('tracking')}>Open full map</button></div><div className="map-body"><AntarcticMap stations={stations} transportLegs={transportLegs} incidents={openIncidents} expeditions={expeditions} cargoItems={cargoItems} resources={resources} onNavigate={onNavigate} /></div></section>
-    <section className="metrics-table" aria-label="API-backed operational metrics">{apiMetrics.map(([label, value, route, module]) => <button key={label} type="button" className="metric-row" onClick={() => onNavigate(route)}><span>{label}</span><strong>{moduleErrors[module] ? 'Unavailable' : value}</strong><span className="metric-link">Open records</span></button>)}</section>
+  const activeMission = activeExpeditions[0]
+  const missionName = recordLabel(activeMission?.name || activeMission?.code, activeMission?.expedition_id, 'MISSION ARTEMIS · 44TH IAE')
+  const missionSeason = activeMission?.season || '2026–27'
 
-    <section className="panel"><div className="panel-header"><div><p className="eyebrow">ACTIVE OPERATIONS & MOVEMENTS · API</p><h2>Expedition activity</h2></div><button type="button" className="btn-link" onClick={() => onNavigate('demo-operations')}>Open operations</button></div><div className="situation-grid">
-      <section><h3>Active expeditions</h3>{moduleErrors.expeditions ? <p className="data-note">Expedition data unavailable from API.</p> : activeExpeditions.length ? <div className="compact-list">{activeExpeditions.slice(0, 5).map((item) => <div className="compact-row" key={item.expedition_id}><div><strong>{recordLabel(item.name, item.code || item.expedition_id)}</strong><span>{item.season || 'Season not provided'} · API expedition</span></div><StatusPill status={item.status} /><button type="button" className="btn-link" onClick={() => onNavigate('demo-operations')}>Open</button></div>)}</div> : <EmptyState compact message="No active expedition records returned by the API." />}</section>
-      <section><h3>Recent transport movements</h3>{moduleErrors.transport ? <p className="data-note">Transport data unavailable from API.</p> : transportLegs.length ? <div className="compact-list">{transportLegs.slice(0, 5).map((leg) => <div className="compact-row" key={leg.leg_id}><div><strong>{recordLabel(leg.code, leg.leg_id)}</strong><span>{stationLabelByReference(leg.origin, stations, 'origin')} to {stationLabelByReference(leg.destination, stations, 'destination')} · API</span></div><StatusPill status={leg.status} /><button type="button" className="btn-link" onClick={() => onNavigate('transport')}>Open</button></div>)}</div> : <EmptyState compact message="No transport legs returned by the API." />}</section>
-    </div></section>
-    <section className="panel"><div className="panel-header"><div><p className="eyebrow">OPERATIONAL SITUATION</p><h2>Exceptions and decisions</h2></div></div><div className="situation-grid">
-      <section><h3>Transport requiring attention</h3>{moduleErrors.transport ? <p className="data-note">Transport data unavailable from API.</p> : attentionLegs.length ? <div className="compact-list">{attentionLegs.slice(0, 5).map((leg) => <div className="compact-row" key={leg.leg_id}><div><strong>{recordLabel(leg.code, leg.leg_id)}</strong><span>{stationLabelByReference(leg.origin, stations, 'origin')} to {stationLabelByReference(leg.destination, stations, 'destination')}</span></div><StatusPill status={leg.status} /><button className="btn-link" type="button" disabled={impactLoading} onClick={() => void onViewImpact(leg.leg_id)}>Impact</button></div>)}</div> : <EmptyState compact message="No transport exceptions reported by the API." />}</section>
-      <section><h3>Inventory exceptions</h3>{moduleErrors.inventory ? <p className="data-note">Inventory data unavailable from API.</p> : inventoryExceptions.length ? <div className="compact-list">{inventoryExceptions.slice(0, 5).map((item) => <div className="compact-row" key={item.stock_id}><strong>{item.item_name || 'Item name unavailable'}</strong><span>{stationLabelById(item.station_id, stations)} - {item.quantity} / reorder {item.reorder_threshold}</span><StatusPill status={Number(item.quantity) === 0 ? 'out_of_stock' : 'low'} /></div>)}</div> : <EmptyState compact message="No quantities below reorder threshold." />}</section>
-      <section><h3>Active incidents</h3>{moduleErrors.incidents ? <p className="data-note">Incident data unavailable from API.</p> : openIncidents.length ? <div className="compact-list">{openIncidents.slice(0, 5).map((incident) => <div className="compact-row" key={incident.incident_id}><div><strong>{recordLabel(null, incident.incident_id)}</strong><span>{incident.type || 'Incident'} - {stationLabelById(incident.station_id, stations)}</span></div><StatusPill status={incident.severity} /><StatusPill status={incident.status} /></div>)}</div> : <EmptyState compact message="No open incidents reported." />}</section>
-      <section><h3>Personnel movement</h3>{assignmentsError ? <p className="data-note">Assignment data unavailable from API.</p> : assignments.length ? <div className="compact-list">{assignments.slice(0, 5).map((assignment) => { const person = personnel.find((entry) => entry.person_id === assignment.personnel_id || entry.personnel_id === assignment.personnel_id); return <div className="compact-row" key={assignment.assignment_id}><div><strong>{recordLabel(person?.name || [person?.first_name, person?.last_name].filter(Boolean).join(' '), person?.employee_code || person?.person_id || person?.personnel_id, 'Unresolved personnel reference')}</strong><span>{stationLabelById(assignment.station_id, stations)} - {assignment.leg_id ? recordLabel(transportLegs.find((leg) => leg.leg_id === assignment.leg_id)?.code, assignment.leg_id, 'Transport unavailable') : 'Transport unavailable'}</span>{!person && <small className="table-subtext">Assignment exists, but personnel details were not returned by the API.</small>}</div><StatusPill status={assignment.status} /></div>})}</div> : !personnelError && personnel.length ? <p className="data-note">Personnel roster: {personnel.length}. No assignment records returned.</p> : !personnelError ? <EmptyState compact message="No assignment records returned by the API." /> : <p className="data-note">Personnel data unavailable. No assignment records returned.</p>}</section>
-      <section><h3>Pending recommendations</h3>{moduleErrors.recommendations ? <p className="data-note">Recommendation data unavailable from API.</p> : pendingRecommendations.length ? <div className="compact-list">{pendingRecommendations.slice(0, 5).map((rec, index) => <div className="compact-row" key={rec.recommendation_id || index}><div><strong>{redactDatabaseIds(rec.recommendation_type || 'Recommendation')}</strong><span>{typeof rec.proposed_change === 'string' ? redactDatabaseIds(rec.proposed_change) : 'Proposal details supplied as structured data'}</span></div><StatusPill status={rec.status} /><button type="button" className="btn-link" onClick={() => onNavigate('recommendations')}>Review</button></div>)}</div> : <EmptyState compact message="No recommendations marked pending by the API." />}</section>
-      <section><h3>Environmental reports</h3>{weatherError ? <p className="data-note">Weather data unavailable from API.</p> : weatherEvents.length ? <div className="compact-list">{weatherEvents.slice(0, 4).map((event, index) => <div className="compact-row" key={event.event_id || event.weather_event_id || index}><strong>{event.event_type || 'Weather report'}</strong><span>{stationLabelById(event.station_id, stations)} - {event.notes || 'No notes'}</span><StatusPill status={event.severity} /></div>)}</div> : <EmptyState compact message="No weather records returned." />}</section>
-    </div></section>
+  return (
+    <div className="page-container command-center" aria-label="Polar Operations Command Center">
+      {/* 1. Header: Mission Context + Operational Status */}
+      <header className="cc-header">
+        <div className="cc-header-context">
+          <div className="cc-header-eyebrow">
+            <span>POLAR OPERATIONS COMMAND HQ</span>
+            <span>·</span>
+            <span>SOUTHERN OCEAN SECTOR</span>
+          </div>
+          <div className="cc-header-title-row">
+            <h1>COMMAND CENTER</h1>
+            <div className="cc-header-meta">
+              <span className="cc-meta-badge">
+                MISSION <strong>{missionName}</strong>
+              </span>
+              <span className="cc-meta-badge">
+                SEASON <strong>{missionSeason}</strong>
+              </span>
+              <span className="cc-meta-badge">
+                HQ <strong>NCPOR · GOA</strong>
+              </span>
+            </div>
+          </div>
+        </div>
 
-    <section className="panel"><div className="panel-header"><div><p className="eyebrow">RECENT ACTIVITY</p><h2>Canonical audit records</h2></div><button type="button" className="btn-link" onClick={() => onNavigate('audit')}>Open audit</button></div>{auditError ? <ErrorBanner message={`Audit records unavailable: ${auditError}`} details={auditErrorDetails} /> : auditLoading ? <p role="status" className="data-note">Loading audit records...</p> : auditRows.length ? <div className="table-scroll"><table><thead><tr><th>Time (UTC)</th><th>Actor</th><th>Action</th><th>Entity</th><th>Source</th></tr></thead><tbody>{auditRows.slice(0, 8).map((row) => <tr key={row.log_id}><td>{Number.isNaN(Date.parse(row.timestamp_utc)) ? 'Invalid timestamp' : formatDateTime(row.timestamp_utc)}</td><td>{safeReference(row.actor_user?.full_name || row.actor_user?.employee_code || row.actor, 'Not provided')}</td><td>{row.action}</td><td>{row.entity_type} - {safeReference(row.entity_id)}</td><td>{safeReference(row.sync_origin || row.device_id, 'Not provided')}</td></tr>)}</tbody></table></div> : <EmptyState compact message="No canonical audit records returned by the API." />}</section>
-    <section className="panel"><div className="panel-header"><div><p className="eyebrow">LOCAL DEMONSTRATION METRICS</p><h2>Demo workflow activity</h2><p className="data-note">Synthetic records and browser-local demo events only. Excluded from API metrics above.</p></div><button type="button" className="btn-link" onClick={() => onNavigate('demo-history')}>Open demo history</button></div><section className="metrics-table demo-metrics" aria-label="Local demo workflow metrics">{demoMetrics.map(([label, value, route]) => <button key={label} type="button" className="metric-row" onClick={() => onNavigate(route)}><span>{label}</span><strong>{value}</strong><span className="metric-link">Open demo module</span></button>)}</section></section>
-    <section className="panel"><div className="panel-header"><div><p className="eyebrow">LOCAL DEMO EVENTS · BROWSER ONLY</p><h2>Recent notifications</h2></div><button type="button" className="btn-link" onClick={() => onNavigate('demo-history')}>Open notifications &amp; history</button></div>{demoState.notifications.length ? <div className="compact-list panel-body">{demoState.notifications.slice(0,6).map(item=><div className="compact-row" key={item.id}><div><strong>{item.text}</strong><span>{formatDateTime(item.at,true)}</span></div><StatusPill status={item.read?'Read':'New'} /></div>)}</div> : <EmptyState compact message="Local demo approvals, incidents and operational actions will appear here." />}</section>
-  </div>
+        <div className="cc-header-status">
+          <span className="provenance-tag api">API BACKEND</span>
+          <div className={`cc-conn-indicator ${isApiDegraded ? 'degraded' : 'connected'}`} role="status">
+            <span className={`cc-conn-dot ${isApiDegraded ? '' : 'pulse-live'}`} aria-hidden="true" />
+            <span>{isApiDegraded ? 'API DEGRADED' : 'API CONNECTED'}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Unmapped Station Quality Notification */}
+      {unmappedStationCount > 0 && (
+        <div className="unavailable-state" role="status">
+          Station reference data requires reconciliation for {unmappedStationCount} API record{unmappedStationCount === 1 ? '' : 's'}.
+        </div>
+      )}
+
+      {/* 2. High-Density Operational KPI Strip */}
+      <section className="cc-kpi-strip" aria-label="Operational KPI Strip">
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('expeditions')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Active Expeditions</span>
+            <span className="provenance-tag api">API</span>
+          </div>
+          <div className="cc-kpi-value">{moduleErrors.expeditions ? <span className="cc-kpi-value is-na">NOT AVAILABLE</span> : activeExpeditions.length}</div>
+          <div className="cc-kpi-bottom">
+            <span>Season {missionSeason}</span>
+            <span>→</span>
+          </div>
+        </button>
+
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('tracking')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Tracked Assets</span>
+            <span className="provenance-tag demo">DEMO + API</span>
+          </div>
+          <div className="cc-kpi-value">{totalTrackedAssets}</div>
+          <div className="cc-kpi-bottom">
+            <span>{demoMoving.length} In Transit</span>
+            <span>→</span>
+          </div>
+        </button>
+
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('incidents')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Open Incidents</span>
+            <span className="provenance-tag api">API</span>
+          </div>
+          <div className={`cc-kpi-value ${openIncidents.length > 0 ? 'is-alert' : ''}`}>
+            {moduleErrors.incidents ? <span className="cc-kpi-value is-na">NOT AVAILABLE</span> : openIncidents.length}
+          </div>
+          <div className="cc-kpi-bottom">
+            <span>{openIncidents.filter((i) => (i.severity || '').toLowerCase() === 'critical').length} Critical</span>
+            <span>→</span>
+          </div>
+        </button>
+
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('transport')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Transport Legs</span>
+            <span className="provenance-tag api">API</span>
+          </div>
+          <div className="cc-kpi-value">{moduleErrors.transport ? <span className="cc-kpi-value is-na">NOT AVAILABLE</span> : transportLegs.length}</div>
+          <div className="cc-kpi-bottom">
+            <span>{attentionLegs.length ? `${attentionLegs.length} Exceptions` : 'Network Nominal'}</span>
+            <span>→</span>
+          </div>
+        </button>
+
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('cargo')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Cargo Records</span>
+            <span className="provenance-tag api">API</span>
+          </div>
+          <div className="cc-kpi-value">{moduleErrors.cargo ? <span className="cc-kpi-value is-na">NOT AVAILABLE</span> : cargoItems.length}</div>
+          <div className="cc-kpi-bottom">
+            <span>{cargoItems.filter((c) => ['in_transit', 'dispatched'].includes((c.status || '').toLowerCase())).length} Moving</span>
+            <span>→</span>
+          </div>
+        </button>
+
+        <button type="button" className="cc-kpi-tile" onClick={() => onNavigate('bases')}>
+          <div className="cc-kpi-tile-top">
+            <span className="cc-kpi-label">Polar Bases</span>
+            <span className="provenance-tag reference">API + REF</span>
+          </div>
+          <div className="cc-kpi-value">{stationsError ? <span className="cc-kpi-value is-na">NOT AVAILABLE</span> : indianStations.length || stations.length || 3}</div>
+          <div className="cc-kpi-bottom">
+            <span>Maitri · Bharati · Himadri</span>
+            <span>→</span>
+          </div>
+        </button>
+      </section>
+
+      {/* 3. Primary Visual: Polar Operations Map */}
+      <section className="cc-map-container" aria-label="Polar Operations Map Anchor">
+        <div className="cc-map-header">
+          <div>
+            <p className="eyebrow">POLAR MARITIME &amp; CONTINENTAL NETWORK</p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '15px', fontWeight: 800 }}>Polar Operations Map</h2>
+          </div>
+          <div className="cc-map-actions">
+            <span className="provenance-tag api">API OVERLAYS</span>
+            <span className="provenance-tag demo">SIMULATED ASSETS</span>
+            <button type="button" className="btn-secondary-sm" onClick={() => onNavigate('tracking')}>
+              Open Full Map
+            </button>
+          </div>
+        </div>
+        <div className="cc-map-body">
+          <AntarcticMap
+            stations={stations}
+            transportLegs={transportLegs}
+            incidents={openIncidents}
+            expeditions={expeditions}
+            cargoItems={cargoItems}
+            resources={resources}
+            personnel={personnel}
+            assignments={assignments}
+            onNavigate={onNavigate}
+          />
+        </div>
+      </section>
+
+      {/* 4. 2x2 Operational Status Grid */}
+      <div className="cc-grid-2x2">
+        {/* Top-Left: Asset / Operational Status Panel */}
+        <section className="cc-panel" aria-label="Asset and Operational Status">
+          <div className="cc-panel-header">
+            <div className="cc-panel-title-area">
+              <span className="eyebrow">FLEET &amp; ASSET MONITORING</span>
+              <h3>Asset / Operational Status</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="provenance-tag demo">DEMO + API</span>
+              <button type="button" className="btn-link" onClick={() => onNavigate('tracking')}>
+                Open Fleet
+              </button>
+            </div>
+          </div>
+          <div className="cc-panel-body">
+            <div className="cc-dense-table-wrapper">
+              <table className="cc-dense-table">
+                <thead>
+                  <tr>
+                    <th>Asset ID / Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Mission / Dest</th>
+                    <th>Location</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {demoState.assets.slice(0, 6).map((asset) => (
+                    <tr key={asset.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('tracking')}>
+                      <td>
+                        <strong>{asset.id}</strong>
+                        <div style={{ fontSize: '9.5px', color: 'var(--polar-muted)' }}>{asset.name}</div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--polar-muted)' }}>{asset.kind}</span>
+                      </td>
+                      <td>
+                        <StatusPill status={asset.status} />
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '10.5px' }}>{asset.destination}</div>
+                        <div style={{ fontSize: '9px', color: 'var(--polar-muted)' }}>{asset.operationId}</div>
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px' }}>
+                          {asset.position.lat.toFixed(2)}°, {asset.position.lon.toFixed(2)}°
+                        </span>
+                      </td>
+                      <td>
+                        <span className="provenance-tag demo">SIMULATED</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {resources.slice(0, 2).map((res) => (
+                    <tr key={res.resource_id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('transport')}>
+                      <td>
+                        <strong>{res.name || res.registration_code}</strong>
+                        <div style={{ fontSize: '9.5px', color: 'var(--polar-muted)' }}>{res.registration_code}</div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--polar-muted)' }}>{res.type}</span>
+                      </td>
+                      <td>
+                        <StatusPill status={res.status} />
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '10.5px' }}>{res.registration_code || 'Fleet Pool'}</div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '10px', color: 'var(--polar-muted)' }}>API Record</span>
+                      </td>
+                      <td>
+                        <span className="provenance-tag api">API</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* Top-Right: Active Incidents Panel */}
+        <section className="cc-panel" aria-label="Active Incidents">
+          <div className="cc-panel-header">
+            <div className="cc-panel-title-area">
+              <span className="eyebrow">SAFETY &amp; ANOMALIES</span>
+              <h3>Active Incidents</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="provenance-tag api">API</span>
+              <button type="button" className="btn-link" onClick={() => onNavigate('incidents')}>
+                Open Incidents
+              </button>
+            </div>
+          </div>
+          <div className="cc-panel-body">
+            {moduleErrors.incidents ? (
+              <p className="data-note">Incident data unavailable from API.</p>
+            ) : openIncidents.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {openIncidents.slice(0, 4).map((incident) => (
+                  <div key={incident.incident_id} className="cc-incident-card">
+                    <div className="cc-incident-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <StatusPill status={incident.severity || 'high'} />
+                        <strong>{recordLabel(null, incident.incident_id)}</strong>
+                        <span style={{ fontSize: '11px', color: 'var(--polar-text)' }}>{incident.type || 'Operational Incident'}</span>
+                      </div>
+                      <StatusPill status={incident.status} />
+                    </div>
+                    <div className="cc-incident-meta">
+                      <span>Base: {stationLabelById(incident.station_id, stations)}</span>
+                      <span>·</span>
+                      <span>Declared: {incident.declared_at ? formatDateTime(incident.declared_at, true) : 'Timestamp unavailable'}</span>
+                      <span>·</span>
+                      <span className="provenance-tag api" style={{ padding: '1px 5px', fontSize: '8.5px' }}>API</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState compact message="NO OPEN INCIDENTS · ALL POLAR SECTORS REPORT NOMINAL SAFETY" />
+            )}
+          </div>
+        </section>
+
+        {/* Bottom-Left: Expedition Activity Panel */}
+        <section className="cc-panel" aria-label="Expedition Activity">
+          <div className="cc-panel-header">
+            <div className="cc-panel-title-area">
+              <span className="eyebrow">OPERATIONAL CAMPAIGNS</span>
+              <h3>Expedition Activity</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="provenance-tag api">API</span>
+              <button type="button" className="btn-link" onClick={() => onNavigate('demo-operations')}>
+                Open Operations
+              </button>
+            </div>
+          </div>
+          <div className="cc-panel-body">
+            {moduleErrors.expeditions ? (
+              <p className="data-note">Expedition data unavailable from API.</p>
+            ) : activeExpeditions.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {activeExpeditions.slice(0, 3).map((item) => (
+                  <div key={item.expedition_id} className="cc-dense-row">
+                    <div>
+                      <strong style={{ fontSize: '12px' }}>{recordLabel(item.name, item.code || item.expedition_id)}</strong>
+                      <div style={{ fontSize: '10px', color: 'var(--polar-muted)' }}>
+                        Season {item.season || 'Not provided'} · Mission ID: {item.expedition_id}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <StatusPill status={item.status} />
+                      <button type="button" className="btn-link" onClick={() => onNavigate('demo-operations')}>
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState compact message="No active expedition records returned by the API." />
+            )}
+
+            {/* Transport Movements Sub-feed */}
+            <div style={{ marginTop: '8px', borderTop: '1px solid var(--polar-line)', paddingTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <span className="eyebrow">ACTIVE TRANSPORT LEGS</span>
+                <button type="button" className="btn-link" style={{ fontSize: '10px' }} onClick={() => onNavigate('transport')}>
+                  View All ({transportLegs.length})
+                </button>
+              </div>
+              {transportLegs.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {transportLegs.slice(0, 3).map((leg) => (
+                    <div key={leg.leg_id} className="cc-dense-row">
+                      <div>
+                        <strong style={{ fontSize: '11px' }}>{recordLabel(leg.code, leg.leg_id)}</strong>
+                        <div style={{ fontSize: '9.5px', color: 'var(--polar-muted)' }}>
+                          {stationLabelByReference(leg.origin, stations, 'origin')} → {stationLabelByReference(leg.destination, stations, 'destination')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <StatusPill status={leg.status} />
+                        {attentionLegs.some((l) => l.leg_id === leg.leg_id) && (
+                          <button className="btn-link" type="button" disabled={impactLoading} onClick={() => void onViewImpact(leg.leg_id)}>
+                            Impact
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState compact message="No transport legs returned by the API." />
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Bottom-Right: Recent Activity Panel */}
+        <section className="cc-panel" aria-label="Recent Activity">
+          <div className="cc-panel-header">
+            <div className="cc-panel-title-area">
+              <span className="eyebrow">AUDIT &amp; OPERATIONS STREAM</span>
+              <h3>Recent Activity</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="provenance-tag api">API</span>
+              <button type="button" className="btn-link" onClick={() => onNavigate('audit')}>
+                Open Audit
+              </button>
+            </div>
+          </div>
+          <div className="cc-panel-body">
+            {auditError ? (
+              <ErrorBanner message={`Audit records unavailable: ${auditError}`} details={auditErrorDetails} />
+            ) : auditLoading ? (
+              <p role="status" className="data-note">Loading canonical audit records...</p>
+            ) : auditRows.length ? (
+              <div className="cc-dense-table-wrapper">
+                <table className="cc-dense-table">
+                  <thead>
+                    <tr>
+                      <th>Time (UTC)</th>
+                      <th>Actor</th>
+                      <th>Action</th>
+                      <th>Entity</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditRows.slice(0, 6).map((row) => (
+                      <tr key={row.log_id}>
+                        <td style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>
+                          {Number.isNaN(Date.parse(row.timestamp_utc)) ? 'Invalid timestamp' : formatDateTime(row.timestamp_utc)}
+                        </td>
+                        <td>{safeReference(row.actor_user?.full_name || row.actor_user?.employee_code || row.actor, 'System Actor')}</td>
+                        <td>
+                          <span style={{ fontWeight: 650, color: 'var(--polar-cyan)' }}>{row.action}</span>
+                        </td>
+                        <td>
+                          {row.entity_type} {row.entity_id ? `· ${safeReference(row.entity_id)}` : ''}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '9.5px', color: 'var(--polar-muted)' }}>{safeReference(row.sync_origin || row.device_id, 'HQ-Server')}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState compact message="No canonical audit records returned by the API." />
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
 }
-
-

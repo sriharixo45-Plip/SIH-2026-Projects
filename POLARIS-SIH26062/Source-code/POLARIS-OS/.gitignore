@@ -8,3 +8,7 @@ local.properties
 .env
 .env.*
 !.env.example
+
+# Android/Gradle generated files
+apps/field-android/.kotlin/
+apps/field-android/app/schemas/

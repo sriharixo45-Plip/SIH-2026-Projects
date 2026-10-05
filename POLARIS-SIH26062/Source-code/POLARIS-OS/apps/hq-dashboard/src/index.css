@@ -1,1 +1,6 @@
+/* Google Fonts for POLARIS-OS HQ Dashboard: Inter (UI) & IBM Plex Mono (Operational Codes) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 /* Global operational theme and base styles are defined in App.css. */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css" important;

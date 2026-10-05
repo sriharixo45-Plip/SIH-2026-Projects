@@ -31,7 +31,8 @@ export class SyncConflictsService {
                 'status', o."status") ORDER BY o."local_sequence_number")
                 FROM "sync_operation" o
                 WHERE c."competing_operations" @> jsonb_build_array(o."op_id"::text)), '[]'::jsonb) AS "operation_details",
-              (SELECT ch."record" FROM "sync_change" ch WHERE ch."entity_type" = c."entity_type" AND ch."entity_id" = c."entity_id" AND ch."deleted" = FALSE ORDER BY ch."cursor" DESC LIMIT 1) AS "server_value"
+              (SELECT ch."record" FROM "sync_change" ch WHERE ch."entity_type" = c."entity_type" AND ch."entity_id" = c."entity_id" AND ch."deleted" = FALSE ORDER BY ch."cursor" DESC LIMIT 1) AS "server_value",
+              (SELECT ch."entity_version" FROM "sync_change" ch WHERE ch."entity_type" = c."entity_type" AND ch."entity_id" = c."entity_id" AND ch."deleted" = FALSE ORDER BY ch."cursor" DESC LIMIT 1) AS "server_version"
        FROM "sync_conflict" c ORDER BY c."resolved_at" NULLS FIRST, c."conflict_id" DESC;`,
     );
   }

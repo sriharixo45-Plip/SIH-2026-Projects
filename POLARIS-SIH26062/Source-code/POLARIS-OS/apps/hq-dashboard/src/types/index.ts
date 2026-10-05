@@ -79,6 +79,8 @@ export type CargoItem = {
   weight?: string | number | null
   volume?: string | number | null
   hazard_class?: string | number | null
+  is_return_cargo?: boolean | null
+  parent_shipment_id?: string | null
   status?: string | null
 }
 
