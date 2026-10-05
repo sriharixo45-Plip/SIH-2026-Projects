@@ -13,7 +13,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE = '/api'
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '/api'
 const TOKEN_KEY = 'polaris_access_token'
 const REFRESH_KEY = 'polaris_refresh_token'
 const REQUEST_TIMEOUT_MS = 15_000
